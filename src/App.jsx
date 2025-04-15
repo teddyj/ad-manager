@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import spinsLogo from './assets/spins-logo.jpg';
 
 // --- Constants ---
 // Renamed first view constant
@@ -23,12 +24,43 @@ const DEFAULT_AD_SIZE = '300x250'; // Default size
 
 // Define Audience Options (Example) - Updated for Dropdown
 const AUDIENCE_OPTIONS = [
-    { label: 'All Audiences', value: 'all' },
-    { label: 'In-Market', value: 'in_market' },
-    { label: 'Diet Type', value: 'diet_type' },
-    { label: 'SPINs Custom', value: 'spins_custom' }
+    { label: 'Working Parent', value: 'working_parent' },
+    { label: 'DINK', value: 'dink' },
+    { label: 'At Home Chef', value: 'at_home_chef' }
 ];
-const DEFAULT_AUDIENCE_TYPE = 'all'; // Default audience type
+const DEFAULT_AUDIENCE_TYPE = 'working_parent'; // Default audience type
+
+// Define Diet Type Options
+const DIET_TYPE_OPTIONS = [
+    { label: 'Plant-based', value: 'plant_based' },
+    { label: 'Gluten Free', value: 'gluten_free' },
+    { label: 'Lactose-Free', value: 'lactose_free' },
+    { label: 'Keto', value: 'keto' },
+    { label: 'Kosher', value: 'kosher' }
+];
+
+// Define Specific Region Options
+const SPECIFIC_REGION_OPTIONS = [
+    { label: 'New York', value: 'new_york' },
+    { label: 'Los Angeles', value: 'los_angeles' },
+    { label: 'Chicago', value: 'chicago' },
+    { label: 'Dallas-Fort Worth', value: 'dallas' },
+    { label: 'Philadelphia', value: 'philadelphia' },
+    { label: 'Houston', value: 'houston' },
+    { label: 'Atlanta', value: 'atlanta' },
+    { label: 'Washington, D.C. (Hagerstown)', value: 'washington_dc' },
+    { label: 'Boston (Manchester)', value: 'boston' },
+    { label: 'San Francisco-Oakland-San Jose', value: 'san_francisco' }
+];
+
+// Define Specific Retailer Options
+const SPECIFIC_RETAILER_OPTIONS = [
+    { label: 'Walmart', value: 'walmart' },
+    { label: 'Publix', value: 'publix' },
+    { label: 'Target', value: 'target' },
+    { label: 'Sprouts', value: 'sprouts' },
+    { label: 'Kroger', value: 'kroger' }
+];
 
 // Define Retailer Options (Example)
 const RETAILER_OPTIONS = [
@@ -116,13 +148,27 @@ const dbOperations = {
  * Displays the application title and potentially navigation/user info.
  */
 function Header() {
-  return (
-    <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 shadow-md sticky top-0 z-10 rounded-b-lg">
-      {/* Updated App Name */}
-      <h1 className="text-2xl font-bold">Campaign Builder</h1>
-      {/* Future: Add user login/profile button here */}
-    </header>
-  );
+    return (
+        <header className="bg-white border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-16">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <img
+                                className="h-12 w-auto"
+                                src={spinsLogo}
+                                alt="SPINS"
+                                onError={(e) => {
+                                    console.error('Logo failed to load:', e);
+                                    e.target.style.display = 'none';
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+    );
 }
 
 /**
@@ -202,7 +248,7 @@ function Button({ onClick, children, className = '', variant = 'primary', disabl
         small: "px-2 py-1 text-xs"
     };
     const variants = {
-        primary: "bg-[#0B2265] hover:bg-[#1939A0] text-white focus:ring-blue-400",
+        primary: "bg-[#F7941D] hover:bg-[#E68A1B] text-white focus:ring-orange-400",
         secondary: "bg-gray-100 hover:bg-gray-200 text-gray-800 focus:ring-gray-400",
         success: "bg-green-600 hover:bg-green-700 text-white focus:ring-green-400",
         danger: "bg-red-600 hover:bg-red-700 text-white focus:ring-red-400",
@@ -611,52 +657,60 @@ function generateNextCreativeName(campaignName) {
  * CreateCampaignScreen Component
  */
 function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
-    // Set default campaign name using the generator
     const [campaignName, setCampaignName] = useState(generateNextCampaignName());
     const [campaignNameError, setCampaignNameError] = useState('');
     const [audienceSegment, setAudienceSegment] = useState(DEFAULT_AUDIENCE_TYPE);
-    const [currentGeoInput, setCurrentGeoInput] = useState('');
-    const [savedGeoLocations, setSavedGeoLocations] = useState([]);
-    const [selectedRetailer, setSelectedRetailer] = useState(DEFAULT_RETAILER);
+    const [showDietOverlay, setShowDietOverlay] = useState(false);
+    const [selectedDietTypes, setSelectedDietTypes] = useState([]);
+    const [showSpecificRetailers, setShowSpecificRetailers] = useState(false);
+    const [selectedRetailers, setSelectedRetailers] = useState([]);
+    const [showSpecificRegions, setShowSpecificRegions] = useState(false);
+    const [selectedRegions, setSelectedRegions] = useState([]);
 
-    // Handle Enter key press in geo input
-    const handleGeoKeyDown = (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault(); // Prevent potential form submission
-            const newLocation = currentGeoInput.trim();
-            // Add location if it's not empty and not already added
-            if (newLocation && !savedGeoLocations.includes(newLocation)) {
-                setSavedGeoLocations([...savedGeoLocations, newLocation]);
-                setCurrentGeoInput(''); // Clear the input field
-            }
+    const handleDietTypeChange = (value) => {
+        if (selectedDietTypes.includes(value)) {
+            setSelectedDietTypes(selectedDietTypes.filter(type => type !== value));
+        } else {
+            setSelectedDietTypes([...selectedDietTypes, value]);
         }
     };
 
-    // Remove a location from the list
-    const removeGeoLocation = (indexToRemove) => {
-        setSavedGeoLocations(savedGeoLocations.filter((_, index) => index !== indexToRemove));
+    const handleRetailerChange = (value) => {
+        if (selectedRetailers.includes(value)) {
+            setSelectedRetailers(selectedRetailers.filter(retailer => retailer !== value));
+        } else {
+            setSelectedRetailers([...selectedRetailers, value]);
+        }
+    };
+
+    const handleRegionChange = (value) => {
+        if (selectedRegions.includes(value)) {
+            setSelectedRegions(selectedRegions.filter(region => region !== value));
+        } else {
+            setSelectedRegions([...selectedRegions, value]);
+        }
     };
 
     const handleContinue = () => {
         const trimmedCampaignName = campaignName.trim();
         if (!trimmedCampaignName) {
             setCampaignNameError('Campaign Name is required.');
-            return; // Stop if validation fails
+            return;
         }
-        setCampaignNameError(''); // Clear error if validation passes
+        setCampaignNameError('');
 
         const campaignSettings = {
-             campaign: {
+            campaign: {
                 name: trimmedCampaignName
-             },
-             audience: {
+            },
+            audience: {
                 type: audienceSegment,
-                locations: savedGeoLocations,
-                retailer: selectedRetailer
-             }
+                dietOverlay: showDietOverlay ? selectedDietTypes : [],
+                specificRetailers: showSpecificRetailers ? selectedRetailers : [],
+                specificRegions: showSpecificRegions ? selectedRegions : []
+            }
         };
-        console.log("Campaign Settings Created:", campaignSettings);
-        onCampaignCreated(campaignSettings); // Pass object containing campaign and audience info
+        onCampaignCreated(campaignSettings);
     };
 
     const handleSaveAndExit = () => {
@@ -673,84 +727,213 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
             },
             audience: {
                 type: audienceSegment,
-                locations: savedGeoLocations,
-                retailer: selectedRetailer
+                dietOverlay: showDietOverlay ? selectedDietTypes : [],
+                specificRetailers: showSpecificRetailers ? selectedRetailers : [],
+                specificRegions: showSpecificRegions ? selectedRegions : []
             }
         };
         onSaveAndExit(campaignSettings);
     };
 
     return (
-        // Updated title
         <Card title="Step 1: Create Campaign" className="max-w-lg mx-auto">
             <p className="text-gray-600 mb-6">Define your campaign name and audience details.</p>
 
             {/* Campaign Name Input */}
-             <div className="mb-6">
+            <div className="mb-6">
                 <InputField
                     id="campaignName"
                     label="Campaign Name"
-                    value={campaignName} // Value bound to state
-                    onChange={(e) => { setCampaignName(e.target.value); setCampaignNameError(''); }} // Clear error on change
+                    value={campaignName}
+                    onChange={(e) => { setCampaignName(e.target.value); setCampaignNameError(''); }}
                     placeholder="e.g., Summer Sale 2025"
-                    error={campaignNameError} // Display validation error
+                    error={campaignNameError}
                 />
-             </div>
+            </div>
 
-             {/* Audience Section */}
-             <div className="border-t pt-4">
-                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Choose Audience</h3>
+            {/* Audience Section */}
+            <div className="border-t pt-4">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Choose Audience</h3>
 
                 {/* Audience Segment Selection Dropdown */}
                 <div className="mb-6">
                     <SelectDropdown
                         id="audienceSegment"
-                        label="Segment Builder"
+                        label="SPINS Shopper Profile"
                         value={audienceSegment}
                         onChange={(e) => setAudienceSegment(e.target.value)}
                         options={AUDIENCE_OPTIONS}
                     />
                 </div>
-                {/* Geo Location Input */}
-                <div className="mb-1">
-                    <InputField
-                        id="geoLocation"
-                        label="Geo Location(s) (Optional, press Enter to add)"
-                        value={currentGeoInput}
-                        onChange={(e) => setCurrentGeoInput(e.target.value)}
-                        onKeyDown={handleGeoKeyDown}
-                        placeholder="e.g., New York, USA or Zip Code"
-                    />
-                </div>
-                {/* Display Saved Geo Locations */}
-                <div className="mb-6 flex flex-wrap gap-2 min-h-[2rem]">
-                    {savedGeoLocations.map((location, index) => (
-                        <span key={index} className="inline-flex items-center bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                            {location}
-                            <button
-                                type="button"
-                                className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full text-blue-500 hover:bg-blue-200 hover:text-blue-700 focus:outline-none"
-                                onClick={() => removeGeoLocation(index)}
-                                aria-label={`Remove ${location}`}
-                            >
-                                &times;
-                            </button>
-                        </span>
-                    ))}
-                </div>
 
-                {/* Retailer Selection Dropdown */}
+                {/* Diet Type Overlay Radio Buttons */}
                 <div className="mb-6">
-                    <SelectDropdown
-                        id="retailer"
-                        label="Target Retailer(s)"
-                        value={selectedRetailer}
-                        onChange={(e) => setSelectedRetailer(e.target.value)}
-                        options={RETAILER_OPTIONS}
-                    />
-                </div>
-             </div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Overlay Diet Type</label>
+                    <div className="space-y-2">
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="dietOverlayNo"
+                                name="dietOverlay"
+                                checked={!showDietOverlay}
+                                onChange={() => {
+                                    setShowDietOverlay(false);
+                                    setSelectedDietTypes([]);
+                                }}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="dietOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                                No
+                            </label>
+                        </div>
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="dietOverlayYes"
+                                name="dietOverlay"
+                                checked={showDietOverlay}
+                                onChange={() => setShowDietOverlay(true)}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="dietOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                                Yes
+                            </label>
+                        </div>
+                    </div>
 
+                    {/* Diet Type Checkboxes */}
+                    {showDietOverlay && (
+                        <div className="mt-4 ml-6 space-y-2">
+                            {DIET_TYPE_OPTIONS.map(option => (
+                                <div key={option.value} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id={`diet-${option.value}`}
+                                        checked={selectedDietTypes.includes(option.value)}
+                                        onChange={() => handleDietTypeChange(option.value)}
+                                        className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
+                                    />
+                                    <label htmlFor={`diet-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                        {option.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Specific Retailer Radio Buttons */}
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Specific Retailers</label>
+                    <div className="space-y-2">
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="retailerOverlayNo"
+                                name="retailerOverlay"
+                                checked={!showSpecificRetailers}
+                                onChange={() => {
+                                    setShowSpecificRetailers(false);
+                                    setSelectedRetailers([]);
+                                }}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="retailerOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                                No
+                            </label>
+                        </div>
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="retailerOverlayYes"
+                                name="retailerOverlay"
+                                checked={showSpecificRetailers}
+                                onChange={() => setShowSpecificRetailers(true)}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="retailerOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                                Yes
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Retailer Checkboxes */}
+                    {showSpecificRetailers && (
+                        <div className="mt-4 ml-6 space-y-2">
+                            {SPECIFIC_RETAILER_OPTIONS.map(option => (
+                                <div key={option.value} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id={`retailer-${option.value}`}
+                                        checked={selectedRetailers.includes(option.value)}
+                                        onChange={() => handleRetailerChange(option.value)}
+                                        className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
+                                    />
+                                    <label htmlFor={`retailer-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                        {option.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Specific Region Radio Buttons */}
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Specific Region</label>
+                    <div className="space-y-2">
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="regionOverlayNo"
+                                name="regionOverlay"
+                                checked={!showSpecificRegions}
+                                onChange={() => {
+                                    setShowSpecificRegions(false);
+                                    setSelectedRegions([]);
+                                }}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="regionOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                                No
+                            </label>
+                        </div>
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="regionOverlayYes"
+                                name="regionOverlay"
+                                checked={showSpecificRegions}
+                                onChange={() => setShowSpecificRegions(true)}
+                                className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
+                            />
+                            <label htmlFor="regionOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                                Yes
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Region Checkboxes */}
+                    {showSpecificRegions && (
+                        <div className="mt-4 ml-6 space-y-2">
+                            {SPECIFIC_REGION_OPTIONS.map(option => (
+                                <div key={option.value} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id={`region-${option.value}`}
+                                        checked={selectedRegions.includes(option.value)}
+                                        onChange={() => handleRegionChange(option.value)}
+                                        className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
+                                    />
+                                    <label htmlFor={`region-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                        {option.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
 
             <div className="space-y-3 mt-6">
                 <Button onClick={handleContinue} variant="primary" className="w-full">
@@ -758,6 +941,9 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                 </Button>
                 <Button onClick={handleSaveAndExit} variant="secondary" className="w-full">
                     Save Campaign and Exit
+                </Button>
+                <Button disabled variant="secondary" className="w-full opacity-60 cursor-not-allowed">
+                    Onboard Audience to Partner (Coming Soon)
                 </Button>
             </div>
         </Card>
@@ -772,17 +958,74 @@ function StartScreen({ onSelectUpload, onSelectUrl, campaignSettings }) {
     // Extract info for display, handle null campaignSettings
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
     const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
-    const audienceLocationsDisplay = campaignSettings?.audience?.locations?.length > 0 ? campaignSettings.audience.locations.join(', ') : 'Any';
-    const retailerLabel = RETAILER_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.retailer)?.label || campaignSettings?.audience?.retailer || 'N/A';
+    
+    // Get diet type labels
+    const dietTypes = campaignSettings?.audience?.dietOverlay || [];
+    const dietTypeLabels = dietTypes.map(type => 
+        DIET_TYPE_OPTIONS.find(opt => opt.value === type)?.label
+    ).filter(Boolean);
+
+    // Get retailer labels
+    const retailers = campaignSettings?.audience?.specificRetailers || [];
+    const retailerLabels = retailers.map(retailer => 
+        SPECIFIC_RETAILER_OPTIONS.find(opt => opt.value === retailer)?.label
+    ).filter(Boolean);
+
+    // Get region labels
+    const regions = campaignSettings?.audience?.specificRegions || [];
+    const regionLabels = regions.map(region => 
+        SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
+    ).filter(Boolean);
 
     return (
         <Card title="Step 2: Build Creative" className="text-center max-w-lg mx-auto">
             {/* Display Campaign and Audience Info */}
-            <div className="text-gray-500 text-sm mb-4 border-b pb-2 text-left">
-                <p>Campaign: <span className="font-medium">{campaignName}</span></p>
-                <p>Segment: <span className="font-medium">{audienceTypeLabel}</span></p>
-                <p>Location(s): <span className="font-medium">{audienceLocationsDisplay}</span></p>
-                <p>Retailer: <span className="font-medium">{retailerLabel}</span></p>
+            <div className="text-gray-500 text-sm mb-4 border-b pb-4 text-left">
+                <p className="font-medium text-gray-700 mb-2">Campaign Settings:</p>
+                <p>Campaign Name: <span className="font-medium">{campaignName}</span></p>
+                <p>SPINS Shopper Profile: <span className="font-medium">{audienceTypeLabel}</span></p>
+                
+                {/* Diet Types */}
+                {dietTypeLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Diet Types:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {dietTypeLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Retailers */}
+                {retailerLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Retailers:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {retailerLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Regions */}
+                {regionLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Regions:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {regionLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <p className="text-gray-600 mb-6">How would you like to provide the ad content?</p>
@@ -817,8 +1060,24 @@ function AssetUpload({ onAssetsUploaded, campaignSettings }) {
     // Extract info for display
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
     const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
-    const audienceLocationsDisplay = campaignSettings?.audience?.locations?.length > 0 ? campaignSettings.audience.locations.join(', ') : 'Any';
-    const retailerLabel = RETAILER_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.retailer)?.label || campaignSettings?.audience?.retailer || 'N/A';
+    
+    // Get diet type labels
+    const dietTypes = campaignSettings?.audience?.dietOverlay || [];
+    const dietTypeLabels = dietTypes.map(type => 
+        DIET_TYPE_OPTIONS.find(opt => opt.value === type)?.label
+    ).filter(Boolean);
+
+    // Get retailer labels
+    const retailers = campaignSettings?.audience?.specificRetailers || [];
+    const retailerLabels = retailers.map(retailer => 
+        SPECIFIC_RETAILER_OPTIONS.find(opt => opt.value === retailer)?.label
+    ).filter(Boolean);
+
+    // Get region labels
+    const regions = campaignSettings?.audience?.specificRegions || [];
+    const regionLabels = regions.map(region => 
+        SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
+    ).filter(Boolean);
 
     const handleFileChange = (event) => {
         const file = event.target.files[0];
@@ -865,11 +1124,52 @@ function AssetUpload({ onAssetsUploaded, campaignSettings }) {
 
     return (
         <Card title="Step 3: Upload Your Assets" className="max-w-lg mx-auto">
-            <div className="text-gray-500 text-sm mb-4 border-b pb-2 text-left">
-                <p>Campaign: <span className="font-medium">{campaignName}</span></p>
-                <p>Segment: <span className="font-medium">{audienceTypeLabel}</span></p>
-                <p>Location(s): <span className="font-medium">{audienceLocationsDisplay}</span></p>
-                <p>Retailer: <span className="font-medium">{retailerLabel}</span></p>
+            <div className="text-gray-500 text-sm mb-4 border-b pb-4 text-left">
+                <p className="font-medium text-gray-700 mb-2">Campaign Settings:</p>
+                <p>Campaign Name: <span className="font-medium">{campaignName}</span></p>
+                <p>SPINS Shopper Profile: <span className="font-medium">{audienceTypeLabel}</span></p>
+                
+                {/* Diet Types */}
+                {dietTypeLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Diet Types:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {dietTypeLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Retailers */}
+                {retailerLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Retailers:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {retailerLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Regions */}
+                {regionLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Regions:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {regionLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Add Creative Name Input */}
@@ -922,8 +1222,24 @@ function UrlInput({ onUrlSubmitted, campaignSettings }) {
     // Extract info for display
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
     const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
-    const audienceLocationsDisplay = campaignSettings?.audience?.locations?.length > 0 ? campaignSettings.audience.locations.join(', ') : 'Any';
-    const retailerLabel = RETAILER_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.retailer)?.label || campaignSettings?.audience?.retailer || 'N/A';
+    
+    // Get diet type labels
+    const dietTypes = campaignSettings?.audience?.dietOverlay || [];
+    const dietTypeLabels = dietTypes.map(type => 
+        DIET_TYPE_OPTIONS.find(opt => opt.value === type)?.label
+    ).filter(Boolean);
+
+    // Get retailer labels
+    const retailers = campaignSettings?.audience?.specificRetailers || [];
+    const retailerLabels = retailers.map(retailer => 
+        SPECIFIC_RETAILER_OPTIONS.find(opt => opt.value === retailer)?.label
+    ).filter(Boolean);
+
+    // Get region labels
+    const regions = campaignSettings?.audience?.specificRegions || [];
+    const regionLabels = regions.map(region => 
+        SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
+    ).filter(Boolean);
 
     const handleSubmit = () => {
         if (!url || !url.startsWith('http')) {
@@ -948,12 +1264,54 @@ function UrlInput({ onUrlSubmitted, campaignSettings }) {
 
     return (
         <Card title="Step 3: Enter Product URL" className="max-w-lg mx-auto">
-            <div className="text-gray-500 text-sm mb-4 border-b pb-2 text-left">
-                 <p>Campaign: <span className="font-medium">{campaignName}</span></p>
-                 <p>Segment: <span className="font-medium">{audienceTypeLabel}</span></p>
-                <p>Location(s): <span className="font-medium">{audienceLocationsDisplay}</span></p>
-                <p>Retailer: <span className="font-medium">{retailerLabel}</span></p>
+            <div className="text-gray-500 text-sm mb-4 border-b pb-4 text-left">
+                <p className="font-medium text-gray-700 mb-2">Campaign Settings:</p>
+                <p>Campaign Name: <span className="font-medium">{campaignName}</span></p>
+                <p>SPINS Shopper Profile: <span className="font-medium">{audienceTypeLabel}</span></p>
+                
+                {/* Diet Types */}
+                {dietTypeLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Diet Types:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {dietTypeLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Retailers */}
+                {retailerLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Retailers:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {retailerLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Regions */}
+                {regionLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Regions:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {regionLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
+
             <p className="text-gray-600 mb-4">Enter the URL of the product you want to advertise.</p>
             <InputField
                 id="productUrl"
@@ -1273,21 +1631,21 @@ function CampaignManagerView({ onCreateNew, onCampaignClick }) {
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center space-x-2">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-[#F7941D]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <h1 className="text-2xl font-semibold text-gray-800">Campaign Manager</h1>
+                    <h1 className="text-2xl font-semibold text-gray-800">Campaigns</h1>
                     <span className="text-gray-500">Status, Budget & More</span>
                 </div>
-                <Button variant="primary" className="bg-coral-500 hover:bg-coral-600" onClick={onCreateNew}>
-                    Launch Campaigns
+                <Button variant="primary" onClick={onCreateNew}>
+                    Launch Campaign
                 </Button>
             </div>
 
             <div className="bg-white rounded-lg shadow">
                 <div className="p-4 border-b border-gray-200">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-semibold text-blue-800">My Campaigns</h2>
+                        <h2 className="text-lg font-semibold text-[#0B2265]">My Campaigns</h2>
                         <div className="flex items-center space-x-2">
                             <Button variant="light" size="small">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1297,7 +1655,6 @@ function CampaignManagerView({ onCreateNew, onCampaignClick }) {
                             <Button 
                                 variant="primary" 
                                 size="small" 
-                                className="bg-coral-500 hover:bg-coral-600"
                                 onClick={onCreateNew}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1473,12 +1830,16 @@ function LeftNav({ currentView, onNavigate }) {
     return (
         <div className="w-64 bg-white border-r border-gray-200 min-h-screen">
             <div className="h-16 flex items-center px-6 border-b border-gray-200">
-                <h1 className="text-xl font-bold text-[#0B2265]">AD MANAGER</h1>
+                <img
+                    src="/ad-manager/spins-logo.jpg"
+                    alt="SPINS"
+                    className="h-14"
+                />
             </div>
             
             <div className="px-4 py-6">
                 <div className="space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">DASHBOARD</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">DASHBOARD</h2>
                     <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_MANAGER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
@@ -1495,7 +1856,7 @@ function LeftNav({ currentView, onNavigate }) {
                 </div>
                 
                 <div className="mt-8 space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">CREATE</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">CREATE</h2>
                     <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_BUILDER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
@@ -1692,7 +2053,7 @@ function App() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
                 <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8">
-                    <h2 className="text-xl font-semibold text-gray-800">
+                    <h2 className="text-xl font-semibold text-[#0B2265]">
                         {appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
                          appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                          'Campaign Builder'}

@@ -7,6 +7,10 @@ export default {
   theme: {
     extend: {
       colors: {
+        spins: {
+          blue: '#0B2265',
+          orange: '#F7941D',
+        },
         coral: {
           500: '#FF7F5C',
           600: '#FF6B44',
@@ -14,5 +18,7 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms'),
+  ],
 } 
