@@ -1358,8 +1358,13 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
     const handlePreviewAndPublish = () => {
         const customizedAdData = {
             ...adData, // Original data (type, image url, fileName etc.)
-            campaignName: campaignName, // Include campaign name
-            audience: campaignSettings.audience, // Include audience object
+            campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign', // Add fallback
+            audience: campaignSettings?.audience || { // Add fallback for audience
+                type: DEFAULT_AUDIENCE_TYPE,
+                dietOverlay: [],
+                specificRetailers: [],
+                specificRegions: []
+            },
             headline,
             description,
             adSize,
@@ -1919,8 +1924,13 @@ function App() {
         console.log("Initial Data Received:", initialData);
         setAdData({
             ...initialData,
-            campaignName: campaignSettings?.campaign?.name,
-            audience: campaignSettings?.audience
+            campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign',
+            audience: campaignSettings?.audience || {
+                type: DEFAULT_AUDIENCE_TYPE,
+                dietOverlay: [],
+                specificRetailers: [],
+                specificRegions: []
+            }
         });
         setCurrentView(VIEW_CUSTOMIZE); // Move to customization view
     };
