@@ -1831,9 +1831,13 @@ function LeftNav({ currentView, onNavigate }) {
         <div className="w-64 bg-white border-r border-gray-200 min-h-screen">
             <div className="h-16 flex items-center px-6 border-b border-gray-200">
                 <img
-                    src="/ad-manager/spins-logo.jpg"
+                    src={spinsLogo}
                     alt="SPINS"
                     className="h-14"
+                    onError={(e) => {
+                        console.error('Logo failed to load:', e);
+                        e.target.style.display = 'none';
+                    }}
                 />
             </div>
             
