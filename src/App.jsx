@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext, createContext } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
+
+// Create AppContext for sharing app state
+const AppContext = createContext({
+    appView: null,
+    setAppView: () => {},
+});
 
 // --- Constants ---
 // Renamed first view constant
@@ -96,6 +102,7 @@ const NEARBY_STORES = [
 const APP_VIEW_CAMPAIGN_MANAGER = 'campaign_manager';
 const APP_VIEW_CAMPAIGN_BUILDER = 'campaign_builder';
 const APP_VIEW_CAMPAIGN_DETAILS = 'campaign_details';
+const APP_VIEW_AD_PLATFORMS = 'ad_platforms';
 
 // Database Operations (using localStorage as temporary storage)
 const dbOperations = {
@@ -1571,11 +1578,21 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
 
 /**
  * PublishScreen Component
- * Step 5: Review and Publish. Includes selected campaign/audience info.
+ * Step 5: Review and Publish Your Ad. Includes selected campaign/audience info.
  */
 function PublishScreen({ adData, onBack }) {
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState(null);
+    const [navigateToAdPlatforms, setNavigateToAdPlatforms] = useState(false);
+
+    // For navigating to Ad Platforms
+    const { setAppView } = useContext(AppContext);
+
+    useEffect(() => {
+        if (navigateToAdPlatforms) {
+            setAppView(APP_VIEW_AD_PLATFORMS);
+        }
+    }, [navigateToAdPlatforms, setAppView]);
 
     // Fallback in case adData is null or incomplete
     if (!adData) {
@@ -1601,6 +1618,40 @@ function PublishScreen({ adData, onBack }) {
                     type: 'success',
                     message: 'Campaign saved successfully!'
                 });
+            } else {
+                setSaveStatus({
+                    type: 'error',
+                    message: 'Failed to save campaign. Please try again.'
+                });
+            }
+        } catch (error) {
+            setSaveStatus({
+                type: 'error',
+                message: 'An error occurred while saving. Please try again.'
+            });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handlePublishToAdPlatform = async (platform) => {
+        setIsSaving(true);
+        setSaveStatus(null);
+
+        try {
+            // First save the campaign
+            const result = await Promise.resolve(dbOperations.saveAd(adData));
+            
+            if (result.success) {
+                setSaveStatus({
+                    type: 'success',
+                    message: `Campaign saved and ready to publish to ${platform}!`
+                });
+                
+                // Navigate to Ad Platforms after a brief delay
+                setTimeout(() => {
+                    setNavigateToAdPlatforms(true);
+                }, 1500);
             } else {
                 setSaveStatus({
                     type: 'error',
@@ -1694,8 +1745,24 @@ function PublishScreen({ adData, onBack }) {
                     {isSaving ? 'Saving...' : 'Save Campaign'}
                 </Button>
 
-                <Button variant="primary" className="w-full" disabled>Publish to Google Ads (Coming Soon)</Button>
-                <Button variant="primary" className="w-full" disabled>Publish to Facebook Ads (Coming Soon)</Button>
+                <Button 
+                    variant="primary" 
+                    className="w-full" 
+                    onClick={() => handlePublishToAdPlatform('Google Ads')}
+                    disabled={isSaving}
+                >
+                    Publish to Google Ads
+                </Button>
+                
+                <Button 
+                    variant="primary" 
+                    className="w-full" 
+                    onClick={() => handlePublishToAdPlatform('Facebook Ads')}
+                    disabled={isSaving}
+                >
+                    Publish to Facebook Ads
+                </Button>
+                
                 <Button variant="secondary" className="w-full" disabled>Download Ad Files</Button>
             </div>
 
@@ -1916,8 +1983,96 @@ function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
     );
 }
 
+// Add AdPlatformsView component to display ad platform connections
+function AdPlatformsView() {
+    // Define the platforms with their logos and connection status
+    const platforms = [
+        { 
+            name: 'Facebook', 
+            icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/2021_Facebook_icon.svg/800px-2021_Facebook_icon.svg.png',
+            connected: false
+        },
+        { 
+            name: 'Instagram', 
+            icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/800px-Instagram_logo_2016.svg.png',
+            connected: false
+        },
+        { 
+            name: 'TikTok', 
+            icon: 'https://upload.wikimedia.org/wikipedia/en/thumb/a/a9/TikTok_logo.svg/800px-TikTok_logo.svg.png',
+            connected: false
+        },
+        { 
+            name: 'YouTube', 
+            icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/800px-YouTube_full-color_icon_%282017%29.svg.png',
+            connected: false
+        },
+        { 
+            name: 'Google Ads', 
+            icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Google_Ads_logo.svg/800px-Google_Ads_logo.svg.png',
+            connected: false
+        }
+    ];
+
+    const handleConnect = (platformName) => {
+        alert(`Connecting to ${platformName}... This feature is coming soon.`);
+    };
+
+    return (
+        <div className="p-6">
+            <Card title="Ad Platform Integrations" className="max-w-4xl mx-auto">
+                <p className="text-gray-600 mb-6">
+                    Connect your ad accounts to deliver campaigns directly to these platforms.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {platforms.map((platform) => (
+                        <div key={platform.name} className="border rounded-lg p-4 flex items-center justify-between">
+                            <div className="flex items-center">
+                                <img 
+                                    src={platform.icon} 
+                                    alt={`${platform.name} logo`} 
+                                    className="w-12 h-12 object-contain mr-4"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = 'https://placehold.co/48x48/cccccc/666666?text=' + platform.name.charAt(0);
+                                    }}
+                                />
+                                <div>
+                                    <h3 className="font-medium">{platform.name}</h3>
+                                    <p className="text-sm text-gray-500">
+                                        {platform.connected ? 'Connected' : 'Not connected'}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button 
+                                variant={platform.connected ? "secondary" : "primary"} 
+                                onClick={() => handleConnect(platform.name)}
+                            >
+                                {platform.connected ? 'Manage' : 'Connect'}
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+                
+                <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="font-medium mb-2">Why connect your ad accounts?</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                        <li>Publish campaigns directly to platforms</li>
+                        <li>View performance metrics in one dashboard</li>
+                        <li>Optimize campaigns based on AI-driven insights</li>
+                        <li>Automatically adjust creative based on platform requirements</li>
+                    </ul>
+                </div>
+            </Card>
+        </div>
+    );
+}
+
 // Add new LeftNav component
-function LeftNav({ currentView, onNavigate }) {
+function LeftNav({ onNavigate }) {
+    const { appView: currentView } = useContext(AppContext);
+    
     return (
         <div className="w-64 bg-white border-r border-gray-200 min-h-screen">
             <div className="h-16 flex items-center px-6 border-b border-gray-200">
@@ -1964,6 +2119,49 @@ function LeftNav({ currentView, onNavigate }) {
                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                         </svg>
                         Campaign Builder
+                    </button>
+                </div>
+
+                <div className="mt-8 space-y-1">
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">IDEATION</h2>
+                    <a
+                        href="https://vibeads.vercel.app/visuals?brandId=8"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50"
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
+                        </svg>
+                        Campaign Brainstorm
+                    </a>
+                    <a
+                        href="https://meetsynthia.ai/app/chat"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50"
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
+                        </svg>
+                        Copy Brainstorm
+                    </a>
+                </div>
+
+                <div className="mt-8 space-y-1">
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">INTEGRATIONS</h2>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_AD_PLATFORMS)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_AD_PLATFORMS
+                                ? 'bg-[#EEF2FF] text-[#0B2265]'
+                                : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                        </svg>
+                        Ad Platforms
                     </button>
                 </div>
             </div>
@@ -2140,62 +2338,67 @@ function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
-            {/* Left Navigation */}
-            <LeftNav currentView={appView} onNavigate={(view) => {
-                setAppView(view);
-                if (view === APP_VIEW_CAMPAIGN_BUILDER) {
-                    setCurrentView(VIEW_CREATE_CAMPAIGN);
-                    setAdData(null);
-                    setCampaignSettings(null);
-                }
-            }} />
+        <AppContext.Provider value={{ appView, setAppView }}>
+            <div className="min-h-screen bg-gray-50 flex">
+                {/* Left Navigation */}
+                <LeftNav onNavigate={(view) => {
+                    setAppView(view);
+                    if (view === APP_VIEW_CAMPAIGN_BUILDER) {
+                        setCurrentView(VIEW_CREATE_CAMPAIGN);
+                        setAdData(null);
+                        setCampaignSettings(null);
+                    }
+                }} />
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8">
-                    <h2 className="text-xl font-semibold text-[#0B2265]">
-                        {appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
-                         appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
-                         'Campaign Builder'}
-                    </h2>
-                </div>
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col">
+                    <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8">
+                        <h2 className="text-xl font-semibold text-[#0B2265]">
+                            {appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
+                            appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
+                            appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
+                            'Campaign Builder'}
+                        </h2>
+                    </div>
 
-                <main className="flex-1 overflow-y-auto p-8">
-                    {appView === APP_VIEW_CAMPAIGN_MANAGER ? (
-                        <CampaignManagerView 
-                            onCreateNew={handleCreateNewCampaign}
-                            onCampaignClick={handleCampaignClick}
-                        />
-                    ) : appView === APP_VIEW_CAMPAIGN_DETAILS ? (
-                        <CampaignDetailsView 
-                            campaign={selectedCampaign}
-                            onBack={handleBackToCampaigns}
-                            onPreviewCreative={handlePreviewCreative}
-                        />
-                    ) : (
-                        <div className="max-w-7xl mx-auto">
-                            {currentView !== VIEW_CREATE_CAMPAIGN && (
-                                <div className="mb-6">
-                                    <Button variant="light" onClick={handleReturnToManager}>
-                                        ← Back to Campaign Manager
-                                    </Button>
+                    <main className="flex-1 overflow-y-auto p-8">
+                        {appView === APP_VIEW_CAMPAIGN_MANAGER ? (
+                            <CampaignManagerView 
+                                onCreateNew={handleCreateNewCampaign}
+                                onCampaignClick={handleCampaignClick}
+                            />
+                        ) : appView === APP_VIEW_CAMPAIGN_DETAILS ? (
+                            <CampaignDetailsView 
+                                campaign={selectedCampaign}
+                                onBack={handleBackToCampaigns}
+                                onPreviewCreative={handlePreviewCreative}
+                            />
+                        ) : appView === APP_VIEW_AD_PLATFORMS ? (
+                            <AdPlatformsView />
+                        ) : (
+                            <div className="max-w-7xl mx-auto">
+                                {currentView !== VIEW_CREATE_CAMPAIGN && (
+                                    <div className="mb-6">
+                                        <Button variant="light" onClick={handleReturnToManager}>
+                                            ← Back to Campaign Manager
+                                        </Button>
+                                    </div>
+                                )}
+                                <StepNavigation currentView={currentView} />
+                                <div className="mt-6">
+                                    {renderCurrentView()}
                                 </div>
-                            )}
-                            <StepNavigation currentView={currentView} />
-                            <div className="mt-6">
-                                {renderCurrentView()}
+                                {currentView !== VIEW_CREATE_CAMPAIGN && (
+                                    <div className="text-center mt-8">
+                                        <Button onClick={handleStartOver} variant="danger">Start Over</Button>
+                                    </div>
+                                )}
                             </div>
-                            {currentView !== VIEW_CREATE_CAMPAIGN && (
-                                <div className="text-center mt-8">
-                                    <Button onClick={handleStartOver} variant="danger">Start Over</Button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </main>
+                        )}
+                    </main>
+                </div>
             </div>
-        </div>
+        </AppContext.Provider>
     );
 }
 
