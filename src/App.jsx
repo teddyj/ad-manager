@@ -1214,10 +1214,12 @@ function AssetUpload({ onAssetsUploaded, campaignSettings }) {
  * UrlInput Component
  * Step 3b: Enter URL. Displays selected campaign/audience info.
  */
-function UrlInput({ onUrlSubmitted, campaignSettings }) {
+function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
     const [url, setUrl] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [apiError, setApiError] = useState(null);
+    const [alternativeSuggestion, setAlternativeSuggestion] = useState(null);
 
     // Extract info for display
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
@@ -1241,25 +1243,75 @@ function UrlInput({ onUrlSubmitted, campaignSettings }) {
         SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
     ).filter(Boolean);
 
-    const handleSubmit = () => {
+    // Fetch product info from API
+    const fetchProductInfo = async () => {
         if (!url || !url.startsWith('http')) {
             setError("Please enter a valid URL (e.g., https://...).");
             return;
         }
+        
         setError('');
+        setApiError(null);
+        setAlternativeSuggestion(null);
         setIsLoading(true);
-        console.log(`Simulating fetch for URL: ${url}`);
-
-        setTimeout(() => {
-            setIsLoading(false);
+        
+        try {
+            console.log(`Fetching product info from URL: ${url}`);
+            
+            // Check if it's Amazon (quick client-side check)
+            const isAmazonUrl = url.includes('amazon.com') || url.includes('amazon.co.uk') || 
+                               url.includes('amazon.ca') || url.includes('amazon.de');
+            
+            if (isAmazonUrl) {
+                console.log('Amazon URL detected. This might be slower or may not work.');
+            }
+            
+            // Call our backend API to fetch the product image
+            const response = await fetch('/api/fetch-product-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url }),
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                // Store any alternative suggestion from the server
+                if (data.alternativeSuggestion) {
+                    setAlternativeSuggestion(data.alternativeSuggestion);
+                }
+                throw new Error(data.error || 'Failed to fetch product information');
+            }
+            
+            if (!data.imageUrl) {
+                throw new Error('No product image found on the page');
+            }
+            
+            // Create a unique creative name
+            const creativeName = generateNextCreativeName(campaignSettings?.campaign?.name);
+            
+            // Pass the product data to the parent component
             onUrlSubmitted({
                 type: 'product',
                 sourceUrl: url,
-                imageUrl: 'https://placehold.co/600x400/d1d1d1/555?text=Product+Image',
-                title: 'Fetched Product Title',
-                description: 'This is a description fetched from the product URL.'
+                imageUrl: data.imageUrl,
+                title: data.title || 'Product Title',
+                description: data.description ? 
+                    (data.description.length > 125 ? 
+                        data.description.substring(0, 125) + '...' : 
+                        data.description) : 
+                    'Product Description',
+                creativeName
             });
-        }, 1500);
+            
+        } catch (error) {
+            console.error('Error fetching product info:', error);
+            setApiError(error.message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -1313,17 +1365,51 @@ function UrlInput({ onUrlSubmitted, campaignSettings }) {
             </div>
 
             <p className="text-gray-600 mb-4">Enter the URL of the product you want to advertise.</p>
+            
+            {/* Remove the preview example and URL examples section entirely */}
+            
             <InputField
                 id="productUrl"
                 label="Product URL"
                 type="url"
                 value={url}
-                onChange={(e) => { setUrl(e.target.value); setError(''); }}
+                onChange={(e) => { setUrl(e.target.value); setError(''); setApiError(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') fetchProductInfo(); }}
                 placeholder="e.g., https://yourstore.com/product/item"
                 error={error}
             />
-            <Button onClick={handleSubmit} variant="primary" className="mt-4 w-full" disabled={isLoading}>
-                {isLoading ? 'Fetching...' : 'Fetch Product & Continue'}
+            
+            {/* Display API error if any */}
+            {apiError && (
+                <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
+                    <p className="font-semibold">Error fetching product:</p>
+                    <p>{apiError}</p>
+                    {alternativeSuggestion && (
+                        <p className="mt-2 text-xs text-gray-600">{alternativeSuggestion}</p>
+                    )}
+                    <div className="mt-4">
+                        <Button 
+                            variant="secondary" 
+                            size="small"
+                            onClick={() => onSelectUpload && onSelectUpload()}
+                            className="text-xs"
+                        >
+                            Switch to Image Upload
+                        </Button>
+                    </div>
+                </div>
+            )}
+            
+            <Button onClick={fetchProductInfo} variant="primary" className="mt-4 w-full" disabled={isLoading}>
+                {isLoading ? (
+                    <span className="flex items-center justify-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Fetching...
+                    </span>
+                ) : 'Fetch Product & Continue'}
             </Button>
         </Card>
     );
@@ -2036,6 +2122,7 @@ function App() {
                 return <UrlInput
                             onUrlSubmitted={handleInitialDataReceived}
                             campaignSettings={campaignSettings} // Pass campaign settings object
+                            onSelectUpload={handleSelectUpload} // Add this prop
                         />;
             case VIEW_CUSTOMIZE:
                 // Pass initial adData and campaign settings
