@@ -324,7 +324,7 @@ function InputField({ id, label, type = 'text', value, onChange, onKeyDown, plac
                 onKeyDown={onKeyDown} // Added onKeyDown prop
                 placeholder={placeholder}
                 disabled={disabled}
-                className={`w-full p-2 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-blue-400 dark:focus:ring-blue-500'} ${type === 'textarea' ? 'min-h-[60px]' : ''} ${disabledStyle} dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400`}
+                className={`w-full p-2 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-blue-400 dark:focus:ring-blue-500'} ${type === 'textarea' ? 'min-h-[60px]' : ''} ${disabledStyle} bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400`}
             />
             {error && <p className="text-red-500 text-xs mt-1 dark:text-red-400">{error}</p>}
         </div>
