@@ -187,7 +187,7 @@ function StepNavigation({ currentView }) {
     const currentStepIndex = STEPS.findIndex(step => step.views.includes(currentView));
 
     return (
-        <nav aria-label="Progress" className="bg-white shadow-sm rounded-lg mb-6 lg:mb-8 p-4">
+        <nav aria-label="Progress" className="bg-white shadow-sm rounded-lg mb-6 lg:mb-8 p-4 dark:bg-gray-800">
             {/* Increased spacing for clarity */}
             <ol role="list" className="flex items-start justify-between space-x-4 md:space-x-8">
                 {STEPS.map((step, index) => {
@@ -204,7 +204,7 @@ function StepNavigation({ currentView }) {
                                     // Start after the circle (left-4 for half of w-8 circle)
                                     // End before the next circle (right-4 for half of w-8 circle)
                                     className={`absolute top-4 left-4 right-4 h-0.5 ${
-                                        isCompleted || isCurrent ? 'bg-blue-600' : 'bg-gray-200'
+                                        isCompleted || isCurrent ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-200 dark:bg-gray-600'
                                     }`}
                                     aria-hidden="true"
                                 />
@@ -214,9 +214,9 @@ function StepNavigation({ currentView }) {
                                 {/* Circle/Icon */}
                                 <span
                                     className={`z-10 flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full ${ // z-10 to be above line
-                                        isCompleted ? 'bg-blue-600 group-hover:bg-blue-800' :
-                                        isCurrent ? 'border-2 border-blue-600 bg-white' :
-                                        'border-2 border-gray-300 bg-white group-hover:border-gray-400'
+                                        isCompleted ? 'bg-blue-600 group-hover:bg-blue-800 dark:bg-blue-500 dark:group-hover:bg-blue-400' :
+                                        isCurrent ? 'border-2 border-blue-600 bg-white dark:border-blue-500 dark:bg-gray-800' :
+                                        'border-2 border-gray-300 bg-white group-hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:group-hover:border-gray-500'
                                     }`}
                                 >
                                     {isCompleted ? (
@@ -224,16 +224,16 @@ function StepNavigation({ currentView }) {
                                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
                                     ) : isCurrent ? (
-                                        <span className="text-blue-600 font-semibold">{step.id}</span>
+                                        <span className="text-blue-600 font-semibold dark:text-blue-400">{step.id}</span>
                                     ) : (
-                                        <span className="text-gray-500 group-hover:text-gray-700">{step.id}</span>
+                                        <span className="text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200">{step.id}</span>
                                     )}
                                 </span>
                                 {/* Step Name Text */}
                                 <span className={`mt-1 text-xs md:text-sm font-medium ${ // Added margin-top
-                                    isCompleted ? 'text-gray-900' :
-                                    isCurrent ? 'text-blue-600' :
-                                    'text-gray-500 group-hover:text-gray-900'
+                                    isCompleted ? 'text-gray-900 dark:text-gray-100' :
+                                    isCurrent ? 'text-blue-600 dark:text-blue-400' :
+                                    'text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-100'
                                 }`}>{step.name}</span>
                             </div>
                         </li>
@@ -256,10 +256,10 @@ function Button({ onClick, children, className = '', variant = 'primary', disabl
     };
     const variants = {
         primary: "bg-[#F7941D] hover:bg-[#E68A1B] text-white focus:ring-orange-400",
-        secondary: "bg-gray-100 hover:bg-gray-200 text-gray-800 focus:ring-gray-400",
+        secondary: "bg-gray-100 hover:bg-gray-200 text-gray-800 focus:ring-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-100 dark:focus:ring-gray-500",
         success: "bg-green-600 hover:bg-green-700 text-white focus:ring-green-400",
         danger: "bg-red-600 hover:bg-red-700 text-white focus:ring-red-400",
-        light: "bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 focus:ring-blue-400"
+        light: "bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 focus:ring-blue-400 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600 dark:focus:ring-blue-500"
     };
     const disabledStyle = "disabled:opacity-50 disabled:cursor-not-allowed";
     return (
@@ -279,8 +279,8 @@ function Button({ onClick, children, className = '', variant = 'primary', disabl
  */
 function Card({ children, title, className = '' }) {
     return (
-        <div className={`bg-white shadow-sm rounded-lg p-6 ${className}`}>
-            {title && <h2 className="text-xl font-semibold mb-4 text-[#0B2265]">{title}</h2>}
+        <div className={`bg-white shadow-sm rounded-lg p-6 ${className} dark:bg-gray-800`}>
+            {title && <h2 className="text-xl font-semibold mb-4 text-[#0B2265] dark:text-gray-200">{title}</h2>}
             {children}
         </div>
     );
@@ -294,11 +294,11 @@ function InputField({ id, label, type = 'text', value, onChange, onKeyDown, plac
     // Basic support for textarea
     const InputElement = type === 'textarea' ? 'textarea' : 'input';
     const typeProp = type === 'textarea' ? {} : { type: type }; // Don't pass type="textarea" to input
-    const disabledStyle = disabled ? "bg-gray-100 cursor-not-allowed" : "";
+    const disabledStyle = disabled ? "bg-gray-100 cursor-not-allowed dark:bg-gray-700" : "";
 
     return (
         <div className={`${disabled ? "opacity-50" : ""} ${className}`}> {/* Dim container when disabled */}
-            {label && <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+            {label && <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">{label}</label>}
             <InputElement
                 id={id}
                 {...typeProp}
@@ -307,9 +307,9 @@ function InputField({ id, label, type = 'text', value, onChange, onKeyDown, plac
                 onKeyDown={onKeyDown} // Added onKeyDown prop
                 placeholder={placeholder}
                 disabled={disabled}
-                className={`w-full p-2 border ${error ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-blue-400'} ${type === 'textarea' ? 'min-h-[60px]' : ''} ${disabledStyle}`}
+                className={`w-full p-2 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-blue-400 dark:focus:ring-blue-500'} ${type === 'textarea' ? 'min-h-[60px]' : ''} ${disabledStyle} dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400`}
             />
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            {error && <p className="text-red-500 text-xs mt-1 dark:text-red-400">{error}</p>}
         </div>
     );
 }
@@ -321,7 +321,7 @@ function InputField({ id, label, type = 'text', value, onChange, onKeyDown, plac
 function RadioGroup({ label, name, options, selectedValue, onChange }) {
     return (
         <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">{label}</label>
             <div className="space-y-2">
                 {options.map((option) => (
                     <div key={option.value} className="flex items-center">
@@ -332,9 +332,9 @@ function RadioGroup({ label, name, options, selectedValue, onChange }) {
                             value={option.value}
                             checked={selectedValue === option.value}
                             onChange={onChange}
-                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-500 dark:checked:bg-blue-500"
                         />
-                        <label htmlFor={`${name}-${option.value}`} className="ml-3 block text-sm font-medium text-gray-700">
+                        <label htmlFor={`${name}-${option.value}`} className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                             {option.label}
                         </label>
                     </div>
@@ -349,17 +349,17 @@ function RadioGroup({ label, name, options, selectedValue, onChange }) {
  * Simple select dropdown.
  */
 function SelectDropdown({ id, label, value, onChange, options, disabled = false }) {
-     const disabledStyle = disabled ? "bg-gray-100 cursor-not-allowed" : "";
+     const disabledStyle = disabled ? "bg-gray-100 cursor-not-allowed dark:bg-gray-700" : "";
      return (
         <div className={disabled ? "opacity-50" : ""}>
-            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">{label}</label>
             <select
                 id={id}
                 name={id}
                 value={value}
                 onChange={onChange}
                 disabled={disabled}
-                className={`w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${disabledStyle}`}
+                className={`w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${disabledStyle} dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-blue-500`}
             >
                 {options.map(option => (
                     <option key={option.value} value={option.value}>
@@ -744,7 +744,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
 
     return (
         <Card title="Step 1: Create Campaign" className="max-w-lg mx-auto">
-            <p className="text-gray-600 mb-6">Define your campaign name and audience details.</p>
+            <p className="text-gray-600 mb-6 dark:text-gray-400">Define your campaign name and audience details.</p>
 
             {/* Campaign Name Input */}
             <div className="mb-6">
@@ -759,8 +759,8 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
             </div>
 
             {/* Audience Section */}
-            <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Choose Audience</h3>
+            <div className="border-t pt-4 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4 dark:text-gray-300">Choose Audience</h3>
 
                 {/* Audience Segment Selection Dropdown */}
                 <div className="mb-6">
@@ -775,7 +775,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
 
                 {/* Diet Type Overlay Radio Buttons */}
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Overlay Diet Type</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Overlay Diet Type</label>
                     <div className="space-y-2">
                         <div className="flex items-center">
                             <input
@@ -789,7 +789,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 }}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="dietOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="dietOverlayNo" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 No
                             </label>
                         </div>
@@ -802,7 +802,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 onChange={() => setShowDietOverlay(true)}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="dietOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="dietOverlayYes" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Yes
                             </label>
                         </div>
@@ -820,7 +820,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                         onChange={() => handleDietTypeChange(option.value)}
                                         className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
                                     />
-                                    <label htmlFor={`diet-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                    <label htmlFor={`diet-${option.value}`} className="ml-3 block text-sm text-gray-700 dark:text-gray-300">
                                         {option.label}
                                     </label>
                                 </div>
@@ -831,7 +831,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
 
                 {/* Specific Retailer Radio Buttons */}
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Specific Retailers</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Specific Retailers</label>
                     <div className="space-y-2">
                         <div className="flex items-center">
                             <input
@@ -845,7 +845,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 }}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="retailerOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="retailerOverlayNo" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 No
                             </label>
                         </div>
@@ -858,7 +858,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 onChange={() => setShowSpecificRetailers(true)}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="retailerOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="retailerOverlayYes" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Yes
                             </label>
                         </div>
@@ -876,7 +876,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                         onChange={() => handleRetailerChange(option.value)}
                                         className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
                                     />
-                                    <label htmlFor={`retailer-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                    <label htmlFor={`retailer-${option.value}`} className="ml-3 block text-sm text-gray-700 dark:text-gray-300">
                                         {option.label}
                                     </label>
                                 </div>
@@ -887,7 +887,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
 
                 {/* Specific Region Radio Buttons */}
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Specific Region</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Specific Region</label>
                     <div className="space-y-2">
                         <div className="flex items-center">
                             <input
@@ -901,7 +901,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 }}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="regionOverlayNo" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="regionOverlayNo" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 No
                             </label>
                         </div>
@@ -914,7 +914,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                 onChange={() => setShowSpecificRegions(true)}
                                 className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300"
                             />
-                            <label htmlFor="regionOverlayYes" className="ml-3 block text-sm font-medium text-gray-700">
+                            <label htmlFor="regionOverlayYes" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Yes
                             </label>
                         </div>
@@ -932,7 +932,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
                                         onChange={() => handleRegionChange(option.value)}
                                         className="focus:ring-[#F7941D] h-4 w-4 text-[#F7941D] border-gray-300 rounded"
                                     />
-                                    <label htmlFor={`region-${option.value}`} className="ml-3 block text-sm text-gray-700">
+                                    <label htmlFor={`region-${option.value}`} className="ml-3 block text-sm text-gray-700 dark:text-gray-300">
                                         {option.label}
                                     </label>
                                 </div>
@@ -1792,20 +1792,20 @@ function CampaignManagerView({ onCreateNew, onCampaignClick }) {
                     <svg className="w-6 h-6 text-[#F7941D]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <h1 className="text-2xl font-semibold text-gray-800">Campaigns</h1>
-                    <span className="text-gray-500">Status, Budget & More</span>
+                    <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Campaigns</h1>
+                    <span className="text-gray-500 dark:text-gray-400">Status, Budget & More</span>
                 </div>
                 <Button variant="primary" onClick={onCreateNew}>
                     Launch Campaign
                 </Button>
             </div>
 
-            <div className="bg-white rounded-lg shadow">
-                <div className="p-4 border-b border-gray-200">
+            <div className="bg-white rounded-lg shadow dark:bg-gray-800">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-semibold text-[#0B2265]">My Campaigns</h2>
+                        <h2 className="text-lg font-semibold text-[#0B2265] dark:text-gray-200">My Campaigns</h2>
                         <div className="flex items-center space-x-2">
-                            <Button variant="light" size="small">
+                            <Button variant="light" size="small" className="dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
                                 </svg>
@@ -1824,52 +1824,52 @@ function CampaignManagerView({ onCreateNew, onCampaignClick }) {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Info</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Budget</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Starts</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ends</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Info</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Created</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Budget</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Starts</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Ends</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             {campaigns.map((campaign) => (
-                                <tr key={campaign.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{campaign.id}</td>
+                                <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{campaign.id}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <button 
                                             onClick={() => onCampaignClick(campaign)}
-                                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
+                                            className="text-sm bg-transparent text-blue-500 hover:text-blue-700 hover:underline focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
                                         >
                                             {campaign.name}
                                         </button>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                                             {campaign.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {campaign.info && (
-                                            <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-5 h-5 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{campaign.created}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{campaign.type}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{campaign.budget}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{campaign.starts}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{campaign.ends}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <Button variant="light" size="small">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{campaign.created}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{campaign.type}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{campaign.budget}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{campaign.starts}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{campaign.ends}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <Button variant="light" size="small" className="dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                             </svg>
@@ -1900,71 +1900,72 @@ function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center space-x-2">
-                    <Button variant="light" onClick={onBack} className="mr-2">
+                    <Button variant="light" onClick={onBack} className="mr-2 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600">
                         ← Back
                     </Button>
-                    <h1 className="text-2xl font-semibold text-gray-800">{campaign.name}</h1>
+                    <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">{campaign.name}</h1>
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow">
+            <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                 {/* Campaign Summary */}
-                <div className="p-4 border-b border-gray-200">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                            <p className="text-sm text-gray-500">Status</p>
-                            <p className="font-medium">{campaign.status}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
+                            <p className="font-medium dark:text-gray-100">{campaign.status}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Created</p>
-                            <p className="font-medium">{campaign.created}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Created</p>
+                            <p className="font-medium dark:text-gray-100">{campaign.created}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Budget</p>
-                            <p className="font-medium">{campaign.budget}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Budget</p>
+                            <p className="font-medium dark:text-gray-100">{campaign.budget}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Type</p>
-                            <p className="font-medium">{campaign.type}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Type</p>
+                            <p className="font-medium dark:text-gray-100">{campaign.type}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Creatives Table */}
                 <div className="p-4">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Campaign Creatives</h2>
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4 dark:text-gray-200">Campaign Creatives</h2>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creative ID</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ad Size</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preview</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Creative ID</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Ad Size</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Preview</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                                 {creatives.map((creative) => (
-                                    <tr key={creative.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                    <tr key={creative.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
                                             <button 
                                                 onClick={() => onPreviewCreative(campaign)}
-                                                className="hover:underline focus:outline-none"
+                                                className="bg-transparent text-blue-500 hover:text-blue-700 hover:underline focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
                                             >
                                                 {creative.id}
                                             </button>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {creative.adSize}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {creative.type}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             <Button 
                                                 variant="light" 
                                                 size="small"
                                                 onClick={() => onPreviewCreative(campaign)}
+                                                className="dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -2021,13 +2022,13 @@ function AdPlatformsView() {
     return (
         <div className="p-6">
             <Card title="Ad Platform Integrations" className="max-w-4xl mx-auto">
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-6 dark:text-gray-400">
                     Connect your ad accounts to deliver campaigns directly to these platforms.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {platforms.map((platform) => (
-                        <div key={platform.name} className="border rounded-lg p-4 flex items-center justify-between">
+                        <div key={platform.name} className="border rounded-lg p-4 flex items-center justify-between dark:border-gray-700">
                             <div className="flex items-center">
                                 <img 
                                     src={platform.icon} 
@@ -2039,8 +2040,8 @@ function AdPlatformsView() {
                                     }}
                                 />
                                 <div>
-                                    <h3 className="font-medium">{platform.name}</h3>
-                                    <p className="text-sm text-gray-500">
+                                    <h3 className="font-medium dark:text-gray-100">{platform.name}</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
                                         {platform.connected ? 'Connected' : 'Not connected'}
                                     </p>
                                 </div>
@@ -2055,9 +2056,9 @@ function AdPlatformsView() {
                     ))}
                 </div>
                 
-                <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h3 className="font-medium mb-2">Why connect your ad accounts?</h3>
-                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200 dark:bg-gray-700 dark:border-gray-600">
+                    <h3 className="font-medium mb-2 dark:text-gray-100">Why connect your ad accounts?</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-400">
                         <li>Publish campaigns directly to platforms</li>
                         <li>View performance metrics in one dashboard</li>
                         <li>Optimize campaigns based on AI-driven insights</li>
@@ -2074,7 +2075,7 @@ function LeftNav({ onNavigate }) {
     const { appView: currentView } = useContext(AppContext);
     
     return (
-        <div className="w-64 bg-white border-r border-gray-200 min-h-screen">
+        <div className="w-64 bg-white border-r border-gray-200 min-h-screen dark:bg-gray-800 dark:border-gray-700">
             <div className="h-16 flex items-center px-6 border-b border-gray-200">
                 <img
                     src={spinsLogo}
@@ -2089,13 +2090,13 @@ function LeftNav({ onNavigate }) {
             
             <div className="px-4 py-6">
                 <div className="space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">DASHBOARD</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">DASHBOARD</h2>
                     <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_MANAGER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
                             currentView === APP_VIEW_CAMPAIGN_MANAGER
-                                ? 'bg-[#EEF2FF] text-[#0B2265]'
-                                : 'text-gray-600 hover:bg-gray-50'
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
                         }`}
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2106,13 +2107,13 @@ function LeftNav({ onNavigate }) {
                 </div>
                 
                 <div className="mt-8 space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">CREATE</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">CREATE</h2>
                     <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_BUILDER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
                             currentView === APP_VIEW_CAMPAIGN_BUILDER
-                                ? 'bg-[#EEF2FF] text-[#0B2265]'
-                                : 'text-gray-600 hover:bg-gray-50'
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
                         }`}
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2123,12 +2124,12 @@ function LeftNav({ onNavigate }) {
                 </div>
 
                 <div className="mt-8 space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">IDEATION</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">IDEATION</h2>
                     <a
                         href="https://vibeads.vercel.app/visuals?brandId=8"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50"
+                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
@@ -2139,7 +2140,7 @@ function LeftNav({ onNavigate }) {
                         href="https://meetsynthia.ai/app/chat"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-50"
+                        className="w-full flex items-center px-2 py-2 text-sm rounded-lg bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
@@ -2149,13 +2150,13 @@ function LeftNav({ onNavigate }) {
                 </div>
 
                 <div className="mt-8 space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider">INTEGRATIONS</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">INTEGRATIONS</h2>
                     <button
                         onClick={() => onNavigate(APP_VIEW_AD_PLATFORMS)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
                             currentView === APP_VIEW_AD_PLATFORMS
-                                ? 'bg-[#EEF2FF] text-[#0B2265]'
-                                : 'text-gray-600 hover:bg-gray-50'
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
                         }`}
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2339,7 +2340,7 @@ function App() {
 
     return (
         <AppContext.Provider value={{ appView, setAppView }}>
-            <div className="min-h-screen bg-gray-50 flex">
+            <div className="min-h-screen bg-gray-50 flex dark:bg-gray-900">
                 {/* Left Navigation */}
                 <LeftNav onNavigate={(view) => {
                     setAppView(view);
@@ -2352,8 +2353,8 @@ function App() {
 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col">
-                    <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8">
-                        <h2 className="text-xl font-semibold text-[#0B2265]">
+                    <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8 dark:bg-gray-800 dark:border-gray-700">
+                        <h2 className="text-xl font-semibold text-[#0B2265] dark:text-gray-200">
                             {appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                             appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
