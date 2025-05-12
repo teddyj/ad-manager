@@ -376,7 +376,7 @@ function SelectDropdown({ id, label, value, onChange, options, disabled = false 
                 value={value}
                 onChange={onChange}
                 disabled={disabled}
-                className={`w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${disabledStyle} dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-blue-500`}
+                className={`w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${disabledStyle} bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-blue-500`}
             >
                 {options.map(option => (
                     <option key={option.value} value={option.value}>
