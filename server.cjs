@@ -46,7 +46,26 @@ setInterval(() => {
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+
+// Add more detailed CORS configuration
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow any origin
+    callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-Requested-With', 'X-Custom-Header'],
+  credentials: true
+}));
+
+// Additional CORS headers for all responses
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, X-Custom-Header');
+  res.header('Access-Control-Allow-Credentials', true);
+  next();
+});
 
 // List of common user agents to rotate through
 const USER_AGENTS = [
@@ -110,10 +129,14 @@ const getRestrictedSiteProductInfo = async (url) => {
  * Response: { imageUrl: "https://example.com/images/product123.jpg" }
  */
 app.post('/api/fetch-product-image', async (req, res) => {
+  console.log('EXPRESS SERVER: Handling request to /api/fetch-product-image');
+  console.log('Express server request body:', JSON.stringify(req.body));
+  
   const { url } = req.body;
 
   // Basic URL validation
   if (!url || !url.startsWith('http')) {
+    console.log('EXPRESS SERVER: Invalid URL format');
     return res.status(400).json({ error: 'Invalid URL format' });
   }
 
@@ -263,8 +286,11 @@ app.post('/api/fetch-product-image', async (req, res) => {
       // Cache the result
       cacheProduct(url, productInfo);
       
+      // Always set content type explicitly
+      res.setHeader('Content-Type', 'application/json');
       res.json(productInfo);
     } else {
+      res.setHeader('Content-Type', 'application/json');
       res.status(404).json({ error: 'No product image found' });
     }
   } catch (error) {
@@ -290,6 +316,8 @@ app.post('/api/fetch-product-image', async (req, res) => {
       errorMessage = 'Request timed out. The website may be slow or blocking our request.';
     }
     
+    // Always set content type explicitly
+    res.setHeader('Content-Type', 'application/json');
     res.status(statusCode).json({ 
       error: errorMessage,
       alternativeSuggestion: 'Try uploading an image directly instead.'

@@ -155,8 +155,16 @@ const dbOperations = {
  * Displays the application title and potentially navigation/user info.
  */
 function Header() {
+    const toggleDarkMode = () => {
+        const htmlElement = document.documentElement;
+        htmlElement.classList.toggle('dark');
+        // Optionally, store the preference in localStorage
+        const isDarkMode = htmlElement.classList.contains('dark');
+        localStorage.setItem('darkMode', isDarkMode ? 'dark' : 'light');
+    };
+
     return (
-        <header className="bg-white border-b border-gray-200">
+        <header className="bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     <div className="flex items-center">
@@ -172,6 +180,15 @@ function Header() {
                             />
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        className="p-2 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                        onClick={toggleDarkMode}
+                    >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </header>
@@ -1249,14 +1266,30 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
     const regionLabels = regions.map(region => 
         SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
     ).filter(Boolean);
-
+    
+    // Function to validate URLs
+    const isValidUrl = (string) => {
+        try {
+            const url = new URL(string);
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (err) {
+            return false;
+        }
+    };
+    
     // Fetch product info from API
     const fetchProductInfo = async () => {
-        if (!url || !url.startsWith('http')) {
-            setError("Please enter a valid URL (e.g., https://...).");
+        // Validate URL
+        if (!url.trim()) {
+            setError('Please enter a product URL');
             return;
         }
-        
+
+        if (!isValidUrl(url)) {
+            setError('Please enter a valid URL (starting with http:// or https://)');
+            return;
+        }
+
         setError('');
         setApiError(null);
         setAlternativeSuggestion(null);
@@ -1274,6 +1307,7 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
             }
             
             // Call our backend API to fetch the product image
+            console.log('Sending request to API with URL:', url);
             const response = await fetch('/api/fetch-product-image', {
                 method: 'POST',
                 headers: {
@@ -1282,17 +1316,42 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
                 body: JSON.stringify({ url }),
             });
             
-            const data = await response.json();
+            console.log('Response status:', response.status);
+            console.log('Response headers:', [...response.headers.entries()]);
+            
+            // Check if we got a JSON response
+            const contentType = response.headers.get('content-type');
+            console.log('Content-Type header:', contentType);
+            
+            let data;
+            
+            try {
+                // Try to parse as JSON regardless of content-type
+                const text = await response.text();
+                console.log('Response text:', text);
+                
+                try {
+                    // Attempt to parse the text as JSON
+                    data = JSON.parse(text);
+                    console.log('Successfully parsed JSON data:', data);
+                } catch (jsonError) {
+                    console.error('JSON parse error:', jsonError);
+                    throw new Error('Failed to parse server response as JSON');
+                }
+            } catch (parseError) {
+                console.error('Error reading response text:', parseError);
+                throw new Error('Server returned an invalid response');
+            }
             
             if (!response.ok) {
                 // Store any alternative suggestion from the server
-                if (data.alternativeSuggestion) {
+                if (data && data.alternativeSuggestion) {
                     setAlternativeSuggestion(data.alternativeSuggestion);
                 }
-                throw new Error(data.error || 'Failed to fetch product information');
+                throw new Error((data && data.error) || 'Failed to fetch product information');
             }
             
-            if (!data.imageUrl) {
+            if (!data || !data.imageUrl) {
                 throw new Error('No product image found on the page');
             }
             
@@ -2074,9 +2133,17 @@ function AdPlatformsView() {
 function LeftNav({ onNavigate }) {
     const { appView: currentView } = useContext(AppContext);
     
+    const toggleDarkMode = () => {
+        const htmlElement = document.documentElement;
+        htmlElement.classList.toggle('dark');
+        // Optionally, store the preference in localStorage
+        const isDarkMode = htmlElement.classList.contains('dark');
+        localStorage.setItem('darkMode', isDarkMode ? 'dark' : 'light');
+    };
+    
     return (
         <div className="w-64 bg-white border-r border-gray-200 min-h-screen dark:bg-gray-800 dark:border-gray-700">
-            <div className="h-16 flex items-center px-6 border-b border-gray-200">
+            <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
                 <img
                     src={spinsLogo}
                     alt="SPINS"
@@ -2086,6 +2153,16 @@ function LeftNav({ onNavigate }) {
                         e.target.style.display = 'none';
                     }}
                 />
+                <button
+                    type="button"
+                    className="p-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    onClick={toggleDarkMode}
+                    title="Toggle dark mode"
+                >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
             </div>
             
             <div className="px-4 py-6">
@@ -2186,6 +2263,24 @@ function App() {
     // State to hold the selected campaign settings { campaign: { name }, audience: { type, locations, retailer } }
     const [campaignSettings, setCampaignSettings] = useState(null); // Updated state name
     const [selectedCampaign, setSelectedCampaign] = useState(null);
+    
+    // Initialize dark mode based on saved preference or system preference
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('darkMode');
+        const htmlElement = document.documentElement;
+        
+        if (savedTheme === 'dark') {
+            htmlElement.classList.add('dark');
+        } else if (savedTheme === 'light') {
+            htmlElement.classList.remove('dark');
+        } else {
+            // If no saved preference, check system preference
+            const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDarkMode) {
+                htmlElement.classList.add('dark');
+            }
+        }
+    }, []);
 
     // --- Event Handlers ---
 
