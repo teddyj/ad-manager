@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
+import { loadSampleData } from './sample-data.js';
 
 // Create AppContext for sharing app state
 const AppContext = createContext({
@@ -68,6 +69,17 @@ const SPECIFIC_RETAILER_OPTIONS = [
     { label: 'Kroger', value: 'kroger' }
 ];
 
+// Product categories
+const PRODUCT_CATEGORIES = [
+    { label: 'Dairy & Alternatives', value: 'dairy_alternatives' },
+    { label: 'Beverages', value: 'beverages' },
+    { label: 'Snacks', value: 'snacks' },
+    { label: 'Pantry Staples', value: 'pantry_staples' },
+    { label: 'Fresh Produce', value: 'fresh_produce' },
+    { label: 'Frozen Foods', value: 'frozen_foods' },
+    { label: 'Health & Wellness', value: 'health_wellness' }
+];
+
 // Define Retailer Options (Example)
 const RETAILER_OPTIONS = [
     { label: 'All Retailers', value: 'all' },
@@ -99,6 +111,9 @@ const NEARBY_STORES = [
 ];
 
 // Add new constants for view switching
+const APP_VIEW_PRODUCT_MANAGER = 'product_manager';
+const APP_VIEW_PRODUCT_DETAILS = 'product_details';
+const APP_VIEW_PRODUCT_FORM = 'product_form';
 const APP_VIEW_CAMPAIGN_MANAGER = 'campaign_manager';
 const APP_VIEW_CAMPAIGN_BUILDER = 'campaign_builder';
 const APP_VIEW_CAMPAIGN_DETAILS = 'campaign_details';
@@ -114,6 +129,7 @@ const dbOperations = {
             // Create a new campaign entry
             const newCampaign = {
                 id: String(Date.now()), // Generate a unique ID
+                productId: adData.productId || null, // NEW: Link to product
                 name: adData.campaignName,
                 status: 'Draft',
                 info: true,
@@ -144,6 +160,67 @@ const dbOperations = {
         } catch (error) {
             console.error('Error getting campaigns:', error);
             return [];
+        }
+    },
+
+    // Product operations
+    saveProduct: (productData) => {
+        try {
+            const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+            const newProduct = {
+                id: String(Date.now()),
+                ...productData,
+                created: new Date().toISOString(),
+                updated: new Date().toISOString(),
+                status: productData.status || 'Draft'
+            };
+            existingProducts.push(newProduct);
+            localStorage.setItem('products', JSON.stringify(existingProducts));
+            return { success: true, product: newProduct };
+        } catch (error) {
+            console.error('Error saving product:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    getProducts: () => {
+        try {
+            return JSON.parse(localStorage.getItem('products') || '[]');
+        } catch (error) {
+            console.error('Error getting products:', error);
+            return [];
+        }
+    },
+
+    updateProduct: (productId, updates) => {
+        try {
+            const products = JSON.parse(localStorage.getItem('products') || '[]');
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex !== -1) {
+                products[productIndex] = {
+                    ...products[productIndex],
+                    ...updates,
+                    updated: new Date().toISOString()
+                };
+                localStorage.setItem('products', JSON.stringify(products));
+                return { success: true, product: products[productIndex] };
+            }
+            return { success: false, error: 'Product not found' };
+        } catch (error) {
+            console.error('Error updating product:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    deleteProduct: (productId) => {
+        try {
+            const products = JSON.parse(localStorage.getItem('products') || '[]');
+            const filteredProducts = products.filter(p => p.id !== productId);
+            localStorage.setItem('products', JSON.stringify(filteredProducts));
+            return { success: true };
+        } catch (error) {
+            console.error('Error deleting product:', error);
+            return { success: false, error: error.message };
         }
     }
 };
@@ -677,19 +754,138 @@ function generateNextCreativeName(campaignName) {
     return `Creative${nextNumber}`;
 }
 
+// Utility function to construct UTM tracking URLs
+function constructTrackingUrl(baseUrl, utmParams) {
+    if (!baseUrl || !utmParams) return baseUrl;
+    
+    try {
+        const url = new URL(baseUrl);
+        const params = new URLSearchParams(url.search);
+        
+        // Add UTM parameters if they exist
+        if (utmParams.utmSource) params.set('utm_source', utmParams.utmSource);
+        if (utmParams.utmMedium) params.set('utm_medium', utmParams.utmMedium);
+        if (utmParams.utmCampaign) params.set('utm_campaign', utmParams.utmCampaign);
+        if (utmParams.utmContent) params.set('utm_content', utmParams.utmContent);
+        if (utmParams.utmTerm) params.set('utm_term', utmParams.utmTerm);
+        
+        url.search = params.toString();
+        return url.toString();
+    } catch (error) {
+        console.error('Error constructing tracking URL:', error);
+        return baseUrl;
+    }
+}
+
 /**
- * CreateCampaignScreen Component
+ * ProductCard Component
  */
-function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
-    const [campaignName, setCampaignName] = useState(generateNextCampaignName());
+function ProductCard({ product, onView, onEdit }) {
+    const primaryImage = product.images?.find(img => img.isPrimary) || product.images?.[0];
+    const campaignCount = dbOperations.getCampaigns().filter(c => c.productId === product.id).length;
+
+    return (
+        <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
+            <div className="aspect-w-16 aspect-h-9 bg-gray-200 dark:bg-gray-700">
+                {primaryImage ? (
+                    <img
+                        src={primaryImage.url}
+                        alt={primaryImage.altText || product.name}
+                        className="w-full h-48 object-cover"
+                    />
+                ) : (
+                    <div className="flex items-center justify-center h-48">
+                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                )}
+            </div>
+            
+            <div className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {product.name}
+                    </h3>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        product.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                        product.status === 'Draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                    }`}>
+                        {product.status}
+                    </span>
+                </div>
+                
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{product.brand}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mb-2 line-clamp-2">{product.description}</p>
+                
+                {product.productUrl && (
+                    <div className="flex items-center text-xs text-blue-600 dark:text-blue-400 mb-3">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.102m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                        <span className="truncate">Product page linked</span>
+                    </div>
+                )}
+                
+                <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {campaignCount} campaign{campaignCount !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex space-x-2">
+                        <Button variant="light" size="small" onClick={onEdit}>
+                            Edit
+                        </Button>
+                        <Button variant="primary" size="small" onClick={onView}>
+                            View
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * CreateCampaignScreen Component - Enhanced for Phase 3
+ */
+function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduct = null }) {
+    // Load available products
+    const [products] = useState(() => dbOperations.getProducts());
+    const [productId, setProductId] = useState(selectedProduct?.id || '');
+    
+    // Generate campaign name based on selected product or default
+    const [campaignName, setCampaignName] = useState(() => {
+        if (selectedProduct) {
+            const campaigns = dbOperations.getCampaigns();
+            const productCampaigns = campaigns.filter(c => c.productId === selectedProduct.id);
+            const nextNumber = getNextAvailableNumber('Campaign', productCampaigns.map(c => c.name));
+            return `${selectedProduct.name} Campaign ${nextNumber}`;
+        }
+        return generateNextCampaignName();
+    });
+    
     const [campaignNameError, setCampaignNameError] = useState('');
-    const [audienceSegment, setAudienceSegment] = useState(DEFAULT_AUDIENCE_TYPE);
+    
+    // Use product defaults if product is selected
+    const selectedProductData = products.find(p => p.id === productId) || selectedProduct;
+    const [audienceSegment, setAudienceSegment] = useState(
+        selectedProductData?.settings?.defaultAudience || DEFAULT_AUDIENCE_TYPE
+    );
     const [showDietOverlay, setShowDietOverlay] = useState(false);
     const [selectedDietTypes, setSelectedDietTypes] = useState([]);
-    const [showSpecificRetailers, setShowSpecificRetailers] = useState(false);
-    const [selectedRetailers, setSelectedRetailers] = useState([]);
-    const [showSpecificRegions, setShowSpecificRegions] = useState(false);
-    const [selectedRegions, setSelectedRegions] = useState([]);
+    const [showSpecificRetailers, setShowSpecificRetailers] = useState(
+        selectedProductData?.settings?.defaultRetailers?.length > 0
+    );
+    const [selectedRetailers, setSelectedRetailers] = useState(
+        selectedProductData?.settings?.defaultRetailers || []
+    );
+    const [showSpecificRegions, setShowSpecificRegions] = useState(
+        selectedProductData?.settings?.defaultRegions?.length > 0
+    );
+    const [selectedRegions, setSelectedRegions] = useState(
+        selectedProductData?.settings?.defaultRegions || []
+    );
 
     const handleDietTypeChange = (value) => {
         if (selectedDietTypes.includes(value)) {
@@ -715,24 +911,61 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
         }
     };
 
+    // Handle product selection change
+    const handleProductChange = (newProductId) => {
+        setProductId(newProductId);
+        
+        if (newProductId) {
+            const product = products.find(p => p.id === newProductId);
+            if (product) {
+                // Update campaign name based on selected product
+                const campaigns = dbOperations.getCampaigns();
+                const productCampaigns = campaigns.filter(c => c.productId === product.id);
+                const nextNumber = getNextAvailableNumber('Campaign', productCampaigns.map(c => c.name));
+                setCampaignName(`${product.name} Campaign ${nextNumber}`);
+                
+                // Apply product defaults
+                setAudienceSegment(product.settings?.defaultAudience || DEFAULT_AUDIENCE_TYPE);
+                setShowSpecificRetailers(product.settings?.defaultRetailers?.length > 0);
+                setSelectedRetailers(product.settings?.defaultRetailers || []);
+                setShowSpecificRegions(product.settings?.defaultRegions?.length > 0);
+                setSelectedRegions(product.settings?.defaultRegions || []);
+            }
+        } else {
+            // Reset to defaults when no product selected
+            setCampaignName(generateNextCampaignName());
+            setAudienceSegment(DEFAULT_AUDIENCE_TYPE);
+            setShowSpecificRetailers(false);
+            setSelectedRetailers([]);
+            setShowSpecificRegions(false);
+            setSelectedRegions([]);
+        }
+    };
+
     const handleContinue = () => {
         const trimmedCampaignName = campaignName.trim();
         if (!trimmedCampaignName) {
             setCampaignNameError('Campaign Name is required.');
             return;
         }
+        if (!productId && products.length > 0) {
+            setCampaignNameError('Please select a product for this campaign.');
+            return;
+        }
         setCampaignNameError('');
 
         const campaignSettings = {
             campaign: {
-                name: trimmedCampaignName
+                name: trimmedCampaignName,
+                productId: productId || null // Include product ID
             },
             audience: {
                 type: audienceSegment,
                 dietOverlay: showDietOverlay ? selectedDietTypes : [],
                 specificRetailers: showSpecificRetailers ? selectedRetailers : [],
                 specificRegions: showSpecificRegions ? selectedRegions : []
-            }
+            },
+            product: selectedProductData // Include product data for UTM defaults
         };
         onCampaignCreated(campaignSettings);
     };
@@ -743,18 +976,24 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
             setCampaignNameError('Campaign Name is required.');
             return;
         }
+        if (!productId && products.length > 0) {
+            setCampaignNameError('Please select a product for this campaign.');
+            return;
+        }
         setCampaignNameError('');
 
         const campaignSettings = {
             campaign: {
-                name: trimmedCampaignName
+                name: trimmedCampaignName,
+                productId: productId || null
             },
             audience: {
                 type: audienceSegment,
                 dietOverlay: showDietOverlay ? selectedDietTypes : [],
                 specificRetailers: showSpecificRetailers ? selectedRetailers : [],
                 specificRegions: showSpecificRegions ? selectedRegions : []
-            }
+            },
+            product: selectedProductData
         };
         onSaveAndExit(campaignSettings);
     };
@@ -762,6 +1001,51 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit }) {
     return (
         <Card title="Step 1: Create Campaign" className="max-w-lg mx-auto">
             <p className="text-gray-600 mb-6 dark:text-gray-400">Define your campaign name and audience details.</p>
+
+            {/* Product Selection - NEW */}
+            {products.length > 0 && (
+                <div className="mb-6">
+                    <SelectDropdown
+                        id="productSelection"
+                        label="Select Product"
+                        value={productId}
+                        onChange={(e) => handleProductChange(e.target.value)}
+                        options={[
+                            { label: selectedProduct ? `${selectedProduct.name} (pre-selected)` : 'Choose a product...', value: '' },
+                            ...products.map(p => ({ 
+                                label: `${p.name} (${p.brand})`, 
+                                value: p.id 
+                            }))
+                        ]}
+                        disabled={!!selectedProduct} // Disable if product pre-selected
+                    />
+                    {selectedProduct && (
+                        <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
+                            Product: {selectedProduct.name} (pre-selected from product details)
+                        </p>
+                    )}
+                    {selectedProductData && (
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                                Using product defaults:
+                            </p>
+                            <ul className="text-xs text-blue-600 dark:text-blue-400 mt-1 space-y-1">
+                                <li>• Audience: {AUDIENCE_OPTIONS.find(opt => opt.value === audienceSegment)?.label}</li>
+                                {selectedRetailers.length > 0 && (
+                                    <li>• Retailers: {selectedRetailers.map(r => 
+                                        SPECIFIC_RETAILER_OPTIONS.find(opt => opt.value === r)?.label
+                                    ).join(', ')}</li>
+                                )}
+                                {selectedRegions.length > 0 && (
+                                    <li>• Regions: {selectedRegions.map(r => 
+                                        SPECIFIC_REGION_OPTIONS.find(opt => opt.value === r)?.label
+                                    ).join(', ')}</li>
+                                )}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Campaign Name Input */}
             <div className="mb-6">
@@ -1138,11 +1422,38 @@ function AssetUpload({ onAssetsUploaded, campaignSettings }) {
             setError('Please select and process a file first.');
             return;
         }
+        // Use product UTM codes if available
+        const product = campaignSettings?.product;
+        const audienceType = campaignSettings?.audience?.type || 'general';
+        
+        let utmData = {
+            utmSource: 'social_media',
+            utmMedium: 'paid_social',
+            utmCampaign: campaignSettings?.campaign?.name?.toLowerCase().replace(/\s+/g, '_') || 'general_campaign',
+            utmContent: `${audienceType}_audience`,
+            utmTerm: ''
+        };
+        
+        // Override with product UTM codes if available
+        if (product?.utmCodes) {
+            utmData = {
+                utmSource: product.utmCodes.source || utmData.utmSource,
+                utmMedium: product.utmCodes.medium || utmData.utmMedium,
+                utmCampaign: product.utmCodes.campaign || utmData.utmCampaign,
+                utmContent: product.utmCodes.content || utmData.utmContent,
+                utmTerm: product.utmCodes.term || utmData.utmTerm
+            };
+        }
+        
         onAssetsUploaded({
             type: 'image',
             url: previewDataUrl,
             fileName: selectedFile.name,
-            creativeName: creativeName.trim()
+            creativeName: creativeName.trim(),
+            title: product?.name || 'Uploaded Product',
+            description: product?.description || 'Product description will be customized in the next step.',
+            productId: product?.id || null,
+            utmData: utmData // Include UTM tracking data
         });
     };
 
@@ -1358,18 +1669,43 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
             // Create a unique creative name
             const creativeName = generateNextCreativeName(campaignSettings?.campaign?.name);
             
+            // Use product UTM codes if available
+            const product = campaignSettings?.product;
+            const audienceType = campaignSettings?.audience?.type || 'general';
+            
+            let utmData = {
+                utmSource: 'social_media',
+                utmMedium: 'paid_social',
+                utmCampaign: campaignSettings?.campaign?.name?.toLowerCase().replace(/\s+/g, '_') || 'general_campaign',
+                utmContent: `${audienceType}_audience`,
+                utmTerm: ''
+            };
+            
+            // Override with product UTM codes if available
+            if (product?.utmCodes) {
+                utmData = {
+                    utmSource: product.utmCodes.source || utmData.utmSource,
+                    utmMedium: product.utmCodes.medium || utmData.utmMedium,
+                    utmCampaign: product.utmCodes.campaign || utmData.utmCampaign,
+                    utmContent: product.utmCodes.content || utmData.utmContent,
+                    utmTerm: product.utmCodes.term || utmData.utmTerm
+                };
+            }
+            
             // Pass the product data to the parent component
             onUrlSubmitted({
                 type: 'product',
                 sourceUrl: url,
                 imageUrl: data.imageUrl,
-                title: data.title || 'Product Title',
+                title: data.title || product?.name || 'Product Title',
                 description: data.description ? 
                     (data.description.length > 125 ? 
                         data.description.substring(0, 125) + '...' : 
                         data.description) : 
-                    'Product Description',
-                creativeName
+                    (product?.description || 'Product Description'),
+                creativeName,
+                productId: product?.id || null,
+                utmData: utmData // Include UTM tracking data
             });
             
         } catch (error) {
@@ -1739,6 +2075,9 @@ function PublishScreen({ adData, onBack }) {
         audience = { type: DEFAULT_AUDIENCE_TYPE, locations: [], retailer: DEFAULT_RETAILER },
         url: uploadedDataUrl,
         imageUrl: fetchedImageUrl,
+        utmData = null,
+        product = null,
+        productId = null
     } = adData;
 
     // Determine the primary image source for display
@@ -1782,6 +2121,84 @@ function PublishScreen({ adData, onBack }) {
                 <p className="text-center text-sm text-gray-500 mb-4">
                     (No Click URL set for text button)
                 </p>
+            )}
+
+            {/* Product Information & UTM Tracking - NEW */}
+            {(product || utmData) && (
+                <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                        📊 Campaign Tracking & Product Details
+                    </h4>
+                    
+                    {/* Product Information */}
+                    {product && (
+                        <div className="mb-4 last:mb-0">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Linked Product:</p>
+                            <div className="bg-white dark:bg-gray-700 p-3 rounded border">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{product.name}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Brand: {product.brand}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Category: {product.category}</p>
+                                {product.metadata?.sku && (
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">SKU: {product.metadata.sku}</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                                         {/* UTM Tracking Parameters */}
+                    {utmData && (
+                        <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">UTM Tracking Parameters:</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                {utmData.utmSource && (
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Source:</span>
+                                        <span className="ml-1 text-gray-600 dark:text-gray-400">{utmData.utmSource}</span>
+                                    </div>
+                                )}
+                                {utmData.utmMedium && (
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Medium:</span>
+                                        <span className="ml-1 text-gray-600 dark:text-gray-400">{utmData.utmMedium}</span>
+                                    </div>
+                                )}
+                                {utmData.utmCampaign && (
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Campaign:</span>
+                                        <span className="ml-1 text-gray-600 dark:text-gray-400">{utmData.utmCampaign}</span>
+                                    </div>
+                                )}
+                                {utmData.utmContent && (
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Content:</span>
+                                        <span className="ml-1 text-gray-600 dark:text-gray-400">{utmData.utmContent}</span>
+                                    </div>
+                                )}
+                                {utmData.utmTerm && (
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border col-span-2">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Term:</span>
+                                        <span className="ml-1 text-gray-600 dark:text-gray-400">{utmData.utmTerm}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Generated Tracking URL - NEW */}
+                            {product?.productUrl && (
+                                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border">
+                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">🔗 Generated Tracking URL:</p>
+                                    <div className="bg-white dark:bg-gray-700 p-2 rounded border break-all">
+                                        <code className="text-xs text-gray-800 dark:text-gray-200">
+                                            {constructTrackingUrl(product.productUrl, utmData)}
+                                        </code>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        This is the URL that will be used in your ads to track campaign performance.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* Save Status Message */}
@@ -1830,6 +2247,80 @@ function PublishScreen({ adData, onBack }) {
                 <Button onClick={onBack} variant="secondary">Back to Editing</Button>
             </div>
         </Card>
+    );
+}
+
+// Add Product Manager component
+function ProductManagerView({ onCreateNew, onProductClick, onEditProduct }) {
+    const [products, setProducts] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        const loadedProducts = dbOperations.getProducts();
+        setProducts(loadedProducts);
+    }, []);
+
+    const filteredProducts = products.filter(product =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.brand.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center space-x-2">
+                    <svg className="w-6 h-6 text-[#F7941D]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Products</h1>
+                    <span className="text-gray-500 dark:text-gray-400">Manage Product Library</span>
+                </div>
+                <Button variant="primary" onClick={onCreateNew}>
+                    Add Product
+                </Button>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="mb-6">
+                <InputField
+                    id="productSearch"
+                    label="Search Products"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by product name or brand..."
+                    className="max-w-md"
+                />
+            </div>
+
+            {/* Products Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.map((product) => (
+                    <ProductCard 
+                        key={product.id}
+                        product={product}
+                        onView={() => onProductClick(product)}
+                        onEdit={() => onEditProduct(product)}
+                    />
+                ))}
+            </div>
+
+            {filteredProducts.length === 0 && (
+                <div className="text-center py-12">
+                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Products Found</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                        {searchTerm ? 'Try adjusting your search terms.' : 'Get started by adding your first product.'}
+                    </p>
+                    {!searchTerm && (
+                        <Button variant="primary" onClick={onCreateNew}>
+                            Add Your First Product
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -1955,6 +2446,9 @@ function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
         type: campaign.adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart'
     }];
 
+    // Get linked product information
+    const linkedProduct = campaign.productId ? dbOperations.getProducts().find(p => p.id === campaign.productId) : null;
+
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
@@ -1988,6 +2482,64 @@ function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Linked Product Information - NEW */}
+                {linkedProduct && (
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                            🏷️ Linked Product
+                        </h3>
+                        <div className="flex items-start space-x-4 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            {linkedProduct.images && linkedProduct.images.length > 0 && (
+                                <img 
+                                    src={linkedProduct.images.find(img => img.isPrimary)?.url || linkedProduct.images[0]?.url} 
+                                    alt={linkedProduct.name}
+                                    className="w-16 h-16 object-cover rounded-lg"
+                                />
+                            )}
+                            <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 dark:text-gray-100">{linkedProduct.name}</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Brand: {linkedProduct.brand}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Category: {linkedProduct.category}</p>
+                                {linkedProduct.metadata?.sku && (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">SKU: {linkedProduct.metadata.sku}</p>
+                                )}
+                                <div className="mt-2">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                        linkedProduct.status === 'active' 
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                                    }`}>
+                                        {linkedProduct.status}
+                                    </span>
+                                </div>
+                            </div>
+                            {linkedProduct.utmCodes && Object.values(linkedProduct.utmCodes).some(v => v) && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="font-medium">UTM Tracking:</p>
+                                    {linkedProduct.utmCodes.source && <p>Source: {linkedProduct.utmCodes.source}</p>}
+                                    {linkedProduct.utmCodes.medium && <p>Medium: {linkedProduct.utmCodes.medium}</p>}
+                                    {linkedProduct.utmCodes.campaign && <p>Campaign: {linkedProduct.utmCodes.campaign}</p>}
+                                </div>
+                            )}
+                            {linkedProduct.productUrl && (
+                                <div className="text-xs">
+                                    <p className="font-medium text-gray-700 dark:text-gray-300">Product Page:</p>
+                                    <a 
+                                        href={linkedProduct.productUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate block"
+                                    >
+                                        {linkedProduct.productUrl.length > 30 
+                                            ? `${linkedProduct.productUrl.substring(0, 30)}...` 
+                                            : linkedProduct.productUrl}
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Creatives Table */}
                 <div className="p-4">
@@ -2129,6 +2681,584 @@ function AdPlatformsView() {
     );
 }
 
+// Add ProductImageManager component
+function ProductImageManager({ images, setImages }) {
+    const [uploadError, setUploadError] = useState('');
+
+    const handleImageUpload = (event) => {
+        const files = Array.from(event.target.files);
+        setUploadError('');
+        
+        files.forEach(file => {
+            if (file && file.type.startsWith('image/')) {
+                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    setUploadError('File size must be less than 10MB');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const newImage = {
+                        id: String(Date.now() + Math.random()),
+                        url: e.target.result,
+                        fileName: file.name,
+                        altText: '',
+                        isPrimary: images.length === 0, // First image is primary by default
+                        size: '300x250', // Default size
+                        uploadDate: new Date().toISOString()
+                    };
+                    setImages(prev => [...prev, newImage]);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                setUploadError('Please select valid image files only');
+            }
+        });
+    };
+
+    const handleImageDelete = (imageId) => {
+        setImages(prev => {
+            const filtered = prev.filter(img => img.id !== imageId);
+            // If we deleted the primary image, make the first remaining image primary
+            if (filtered.length > 0 && !filtered.some(img => img.isPrimary)) {
+                filtered[0].isPrimary = true;
+            }
+            return filtered;
+        });
+    };
+
+    const handleSetPrimary = (imageId) => {
+        setImages(prev => prev.map(img => ({
+            ...img,
+            isPrimary: img.id === imageId
+        })));
+    };
+
+    const handleAltTextChange = (imageId, altText) => {
+        setImages(prev => prev.map(img => 
+            img.id === imageId ? { ...img, altText } : img
+        ));
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* Upload Area */}
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="imageUpload"
+                />
+                <label
+                    htmlFor="imageUpload"
+                    className="cursor-pointer flex flex-col items-center"
+                >
+                    <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-gray-600 dark:text-gray-400">
+                        Click to upload product images
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                        PNG, JPG, GIF up to 10MB each
+                    </p>
+                </label>
+            </div>
+
+            {/* Upload Error */}
+            {uploadError && (
+                <div className="text-red-600 text-sm">{uploadError}</div>
+            )}
+
+            {/* Uploaded Images Grid */}
+            {images.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {images.map((image) => (
+                        <div key={image.id} className="relative bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
+                            <img
+                                src={image.url}
+                                alt={image.altText || 'Product image'}
+                                className="w-full h-32 object-cover"
+                            />
+                            
+                            {/* Primary Badge */}
+                            {image.isPrimary && (
+                                <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
+                                    Primary
+                                </div>
+                            )}
+                            
+                            {/* Action Buttons */}
+                            <div className="absolute top-2 right-2 flex space-x-1">
+                                {!image.isPrimary && (
+                                    <button
+                                        onClick={() => handleSetPrimary(image.id)}
+                                        className="bg-blue-500 text-white p-1 rounded text-xs hover:bg-blue-600"
+                                        title="Set as primary"
+                                    >
+                                        ★
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => handleImageDelete(image.id)}
+                                    className="bg-red-500 text-white p-1 rounded text-xs hover:bg-red-600"
+                                    title="Delete image"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            {/* Alt Text Input */}
+                            <div className="p-2">
+                                <input
+                                    type="text"
+                                    value={image.altText}
+                                    onChange={(e) => handleAltTextChange(image.id, e.target.value)}
+                                    placeholder="Alt text for accessibility..."
+                                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Enhanced ProductFormView component (Phase 2)
+function ProductFormView({ product = null, onSave, onCancel }) {
+    const isEditing = !!product;
+    const [formData, setFormData] = useState({
+        name: product?.name || '',
+        description: product?.description || '',
+        brand: product?.brand || '',
+        category: product?.category || '',
+        productUrl: product?.productUrl || '',
+        utmCodes: {
+            source: product?.utmCodes?.source || '',
+            medium: product?.utmCodes?.medium || '',
+            campaign: product?.utmCodes?.campaign || '',
+            term: product?.utmCodes?.term || '',
+            content: product?.utmCodes?.content || ''
+        },
+        settings: {
+            defaultAudience: product?.settings?.defaultAudience || DEFAULT_AUDIENCE_TYPE,
+            defaultRetailers: product?.settings?.defaultRetailers || [],
+            defaultRegions: product?.settings?.defaultRegions || []
+        },
+        metadata: {
+            sku: product?.metadata?.sku || '',
+            tags: product?.metadata?.tags || [],
+            retailerUrls: product?.metadata?.retailerUrls || []
+        },
+        status: product?.status || 'Draft'
+    });
+    
+    const [images, setImages] = useState(product?.images || []);
+    const [errors, setErrors] = useState({});
+
+    const handleInputChange = (field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
+        // Clear error when user starts typing
+        if (errors[field]) {
+            setErrors(prev => ({ ...prev, [field]: null }));
+        }
+    };
+
+    const handleNestedInputChange = (section, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [section]: {
+                ...prev[section],
+                [field]: value
+            }
+        }));
+    };
+
+    const validateForm = () => {
+        const newErrors = {};
+        if (!formData.name.trim()) newErrors.name = 'Product name is required';
+        if (!formData.brand.trim()) newErrors.brand = 'Brand is required';
+        if (!formData.category) newErrors.category = 'Category is required';
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async () => {
+        if (!validateForm()) return;
+
+        const productData = {
+            ...formData,
+            images
+        };
+
+        try {
+            const result = isEditing 
+                ? await dbOperations.updateProduct(product.id, productData)
+                : await dbOperations.saveProduct(productData);
+            
+            if (result.success) {
+                onSave(result.product);
+            }
+        } catch (error) {
+            console.error('Error saving product:', error);
+        }
+    };
+
+    return (
+        <div className="p-6 max-w-4xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">
+                    {isEditing ? `Edit ${product.name}` : 'Add New Product'}
+                </h1>
+                <Button variant="light" onClick={onCancel}>
+                    Cancel
+                </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Basic Information */}
+                <Card title="Basic Information">
+                    <div className="space-y-4">
+                        <InputField
+                            id="productName"
+                            label="Product Name"
+                            value={formData.name}
+                            onChange={(e) => handleInputChange('name', e.target.value)}
+                            placeholder="e.g., Mountain Huckleberry Yogurt"
+                            error={errors.name}
+                        />
+                        
+                        <InputField
+                            id="brand"
+                            label="Brand"
+                            value={formData.brand}
+                            onChange={(e) => handleInputChange('brand', e.target.value)}
+                            placeholder="e.g., SPINS Organic"
+                            error={errors.brand}
+                        />
+                        
+                        <SelectDropdown
+                            id="category"
+                            label="Category"
+                            value={formData.category}
+                            onChange={(e) => handleInputChange('category', e.target.value)}
+                            options={PRODUCT_CATEGORIES}
+                            error={errors.category}
+                        />
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Description
+                            </label>
+                            <textarea
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#F7941D] focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+                                rows="3"
+                                value={formData.description}
+                                onChange={(e) => handleInputChange('description', e.target.value)}
+                                placeholder="Brief description of the product..."
+                            />
+                        </div>
+
+                        <InputField
+                            id="productUrl"
+                            label="Product URL"
+                            type="url"
+                            value={formData.productUrl || ''}
+                            onChange={(e) => handleInputChange('productUrl', e.target.value)}
+                            placeholder="https://www.tillamook.com/products/yogurt/mountain-huckleberry-yogurt"
+                        />
+
+                        <SelectDropdown
+                            id="status"
+                            label="Status"
+                            value={formData.status}
+                            onChange={(e) => handleInputChange('status', e.target.value)}
+                            options={[
+                                { label: 'Draft', value: 'Draft' },
+                                { label: 'Active', value: 'Active' },
+                                { label: 'Archived', value: 'Archived' }
+                            ]}
+                        />
+                    </div>
+                </Card>
+
+                {/* UTM Codes */}
+                <Card title="UTM Tracking Codes">
+                    <div className="space-y-4">
+                        <InputField
+                            id="utmSource"
+                            label="UTM Source"
+                            value={formData.utmCodes.source}
+                            onChange={(e) => handleNestedInputChange('utmCodes', 'source', e.target.value)}
+                            placeholder="e.g., newsletter"
+                        />
+                        
+                        <InputField
+                            id="utmMedium"
+                            label="UTM Medium"
+                            value={formData.utmCodes.medium}
+                            onChange={(e) => handleNestedInputChange('utmCodes', 'medium', e.target.value)}
+                            placeholder="e.g., email"
+                        />
+                        
+                        <InputField
+                            id="utmCampaign"
+                            label="UTM Campaign"
+                            value={formData.utmCodes.campaign}
+                            onChange={(e) => handleNestedInputChange('utmCodes', 'campaign', e.target.value)}
+                            placeholder="e.g., spring_launch"
+                        />
+
+                        <InputField
+                            id="utmTerm"
+                            label="UTM Term (Optional)"
+                            value={formData.utmCodes.term}
+                            onChange={(e) => handleNestedInputChange('utmCodes', 'term', e.target.value)}
+                            placeholder="e.g., huckleberry"
+                        />
+
+                        <InputField
+                            id="utmContent"
+                            label="UTM Content (Optional)"
+                            value={formData.utmCodes.content}
+                            onChange={(e) => handleNestedInputChange('utmCodes', 'content', e.target.value)}
+                            placeholder="e.g., yogurt_promo"
+                        />
+                    </div>
+                </Card>
+            </div>
+
+            {/* Product Metadata */}
+            <Card title="Product Metadata" className="mt-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <InputField
+                        id="sku"
+                        label="SKU"
+                        value={formData.metadata.sku}
+                        onChange={(e) => handleNestedInputChange('metadata', 'sku', e.target.value)}
+                        placeholder="e.g., SPO-YOG-HUCK-001"
+                    />
+                </div>
+            </Card>
+
+            {/* Image Management Section */}
+            <Card title="Product Images" className="mt-8">
+                <ProductImageManager images={images} setImages={setImages} />
+            </Card>
+
+            {/* Form Actions */}
+            <div className="flex justify-end space-x-4 mt-8">
+                <Button variant="secondary" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button variant="primary" onClick={handleSubmit}>
+                    {isEditing ? 'Update Product' : 'Create Product'}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// Add ProductDetailsView component
+function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
+    const [campaigns, setCampaigns] = useState([]);
+
+    useEffect(() => {
+        const allCampaigns = dbOperations.getCampaigns();
+        const productCampaigns = allCampaigns.filter(c => c.productId === product.id);
+        setCampaigns(productCampaigns);
+    }, [product.id]);
+
+    return (
+        <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center space-x-2">
+                    <Button variant="light" onClick={onBack} className="mr-2">
+                        ← Back to Products
+                    </Button>
+                    <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">{product.name}</h1>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        product.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                        product.status === 'Draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                    }`}>
+                        {product.status}
+                    </span>
+                </div>
+                <div className="flex space-x-2">
+                    <Button variant="light" onClick={() => onEdit(product)}>
+                        Edit Product
+                    </Button>
+                    <Button variant="primary" onClick={() => onCreateCampaign(product)}>
+                        Create Campaign
+                    </Button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Product Information */}
+                <div className="lg:col-span-2">
+                    <Card title="Product Information">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Brand</p>
+                                <p className="font-medium dark:text-gray-100">{product.brand}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Category</p>
+                                <p className="font-medium dark:text-gray-100">
+                                    {PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label || product.category}
+                                </p>
+                            </div>
+                            {product.metadata?.sku && (
+                                <div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">SKU</p>
+                                    <p className="font-mono text-sm dark:text-gray-100">{product.metadata.sku}</p>
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Created</p>
+                                <p className="font-medium dark:text-gray-100">
+                                    {new Date(product.created).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Description</p>
+                                <p className="font-medium dark:text-gray-100">{product.description}</p>
+                            </div>
+                            {product.productUrl && (
+                                <div className="col-span-2">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Product URL</p>
+                                    <div className="flex items-center space-x-2">
+                                        <a 
+                                            href={product.productUrl} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium truncate"
+                                        >
+                                            {product.productUrl}
+                                        </a>
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    {/* UTM Codes */}
+                    {product.utmCodes && Object.values(product.utmCodes).some(v => v) && (
+                        <Card title="UTM Tracking Codes" className="mt-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                {Object.entries(product.utmCodes).map(([key, value]) => (
+                                    value && (
+                                        <div key={key}>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
+                                                UTM {key}
+                                            </p>
+                                            <p className="font-mono text-sm dark:text-gray-100">{value}</p>
+                                        </div>
+                                    )
+                                ))}
+                            </div>
+                        </Card>
+                    )}
+
+                    {/* Campaigns */}
+                    <Card title={`Campaigns (${campaigns.length})`} className="mt-6">
+                        {campaigns.length > 0 ? (
+                            <div className="space-y-3">
+                                {campaigns.map((campaign) => (
+                                    <div key={campaign.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                        <div>
+                                            <h4 className="font-medium dark:text-gray-100">{campaign.name}</h4>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                Created {campaign.created} • {campaign.status}
+                                            </p>
+                                        </div>
+                                        <Button variant="light" size="small">
+                                            View
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">No campaigns created yet</p>
+                                <Button variant="primary" onClick={() => onCreateCampaign(product)}>
+                                    Create First Campaign
+                                </Button>
+                            </div>
+                        )}
+                    </Card>
+                </div>
+
+                {/* Product Images */}
+                <div>
+                    <Card title="Product Images">
+                        {product.images && product.images.length > 0 ? (
+                            <div className="space-y-3">
+                                {product.images.map((image) => (
+                                    <div key={image.id} className="relative">
+                                        <img
+                                            src={image.url}
+                                            alt={image.altText || product.name}
+                                            className="w-full h-32 object-cover rounded"
+                                        />
+                                        {image.isPrimary && (
+                                            <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
+                                                Primary
+                                            </div>
+                                        )}
+                                        {image.altText && (
+                                            <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">{image.altText}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <svg className="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No images uploaded</p>
+                            </div>
+                        )}
+                    </Card>
+
+                    {/* Quick Actions */}
+                    <Card title="Quick Actions" className="mt-6">
+                        <div className="space-y-3">
+                            <Button variant="primary" className="w-full" onClick={() => onCreateCampaign(product)}>
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                Create Campaign
+                            </Button>
+                            <Button variant="light" className="w-full" onClick={() => onEdit(product)}>
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit Product
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // Add new LeftNav component
 function LeftNav({ onNavigate }) {
     const { appView: currentView } = useContext(AppContext);
@@ -2168,6 +3298,19 @@ function LeftNav({ onNavigate }) {
             <div className="px-4 py-6">
                 <div className="space-y-1">
                     <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">DASHBOARD</h2>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_PRODUCT_MANAGER)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_PRODUCT_MANAGER || currentView === APP_VIEW_PRODUCT_DETAILS || currentView === APP_VIEW_PRODUCT_FORM
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                        Products
+                    </button>
                     <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_MANAGER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
@@ -2255,7 +3398,7 @@ function LeftNav({ onNavigate }) {
  */
 function App() {
     // Add state for app view
-    const [appView, setAppView] = useState(APP_VIEW_CAMPAIGN_MANAGER);
+    const [appView, setAppView] = useState(APP_VIEW_PRODUCT_MANAGER);
     // State to manage the current view/step - Start with campaign creation
     const [currentView, setCurrentView] = useState(VIEW_CREATE_CAMPAIGN); // Updated initial view
     // State to hold the data for the ad being created (including customizations)
@@ -2263,6 +3406,8 @@ function App() {
     // State to hold the selected campaign settings { campaign: { name }, audience: { type, locations, retailer } }
     const [campaignSettings, setCampaignSettings] = useState(null); // Updated state name
     const [selectedCampaign, setSelectedCampaign] = useState(null);
+    // State for product management
+    const [selectedProduct, setSelectedProduct] = useState(null);
     
     // Initialize dark mode based on saved preference or system preference
     useEffect(() => {
@@ -2280,6 +3425,9 @@ function App() {
                 htmlElement.classList.add('dark');
             }
         }
+
+        // Load sample data for demonstration
+        loadSampleData();
     }, []);
 
     // --- Event Handlers ---
@@ -2305,12 +3453,16 @@ function App() {
         setAdData({
             ...initialData,
             campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign',
+            productId: campaignSettings?.campaign?.productId || initialData?.productId || null,
             audience: campaignSettings?.audience || {
                 type: DEFAULT_AUDIENCE_TYPE,
                 dietOverlay: [],
                 specificRetailers: [],
                 specificRegions: []
-            }
+            },
+            // Include UTM data and product information
+            utmData: initialData?.utmData || null,
+            product: campaignSettings?.product || null
         });
         setCurrentView(VIEW_CUSTOMIZE); // Move to customization view
     };
@@ -2360,9 +3512,10 @@ function App() {
 
     const handleSaveAndExit = async (settings) => {
         try {
-            // Create a campaign with minimal data
+            // Create a campaign with minimal data, including product linkage
             const result = await Promise.resolve(dbOperations.saveAd({
                 campaignName: settings.campaign.name,
+                productId: settings.campaign.productId, // Include product linkage
                 audience: settings.audience,
                 // Add minimal required fields
                 ctaType: CTA_TYPE_TEXT,
@@ -2372,6 +3525,8 @@ function App() {
             if (result.success) {
                 // Return to campaign manager
                 setAppView(APP_VIEW_CAMPAIGN_MANAGER);
+                // Clear selected product when exiting
+                setSelectedProduct(null);
             } else {
                 // Handle error (you might want to show an error message)
                 console.error('Failed to save campaign');
@@ -2391,6 +3546,35 @@ function App() {
         setCurrentView(VIEW_PUBLISH);
     };
 
+    // Product handlers
+    const handleCreateNewProduct = () => {
+        setAppView(APP_VIEW_PRODUCT_FORM);
+        setSelectedProduct(null);
+    };
+
+    const handleProductClick = (product) => {
+        setSelectedProduct(product);
+        setAppView(APP_VIEW_PRODUCT_DETAILS);
+    };
+
+    const handleEditProduct = (product) => {
+        setSelectedProduct(product);
+        setAppView(APP_VIEW_PRODUCT_FORM);
+    };
+
+    const handleProductSaved = (product) => {
+        setAppView(APP_VIEW_PRODUCT_MANAGER);
+        setSelectedProduct(null);
+    };
+
+    const handleCreateCampaignFromProduct = (product) => {
+        setSelectedProduct(product);
+        setAppView(APP_VIEW_CAMPAIGN_BUILDER);
+        setCurrentView(VIEW_CREATE_CAMPAIGN);
+        setAdData(null);
+        setCampaignSettings(null);
+    };
+
     // --- Render Logic ---
 
     // Function to render the current view based on state
@@ -2400,6 +3584,7 @@ function App() {
                 return <CreateCampaignScreen 
                     onCampaignCreated={handleCampaignCreated}
                     onSaveAndExit={handleSaveAndExit}
+                    selectedProduct={selectedProduct}
                 />;
             case VIEW_START:
                 return <StartScreen
@@ -2450,7 +3635,10 @@ function App() {
                 <div className="flex-1 flex flex-col">
                     <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8 dark:bg-gray-800 dark:border-gray-700">
                         <h2 className="text-xl font-semibold text-[#0B2265] dark:text-gray-200">
-                            {appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
+                            {appView === APP_VIEW_PRODUCT_MANAGER ? 'Product Manager' :
+                            appView === APP_VIEW_PRODUCT_DETAILS ? `${selectedProduct?.name || 'Product Details'}` :
+                            appView === APP_VIEW_PRODUCT_FORM ? (selectedProduct ? `Edit ${selectedProduct.name}` : 'Add New Product') :
+                            appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                             appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
                             'Campaign Builder'}
@@ -2458,7 +3646,26 @@ function App() {
                     </div>
 
                     <main className="flex-1 overflow-y-auto p-8">
-                        {appView === APP_VIEW_CAMPAIGN_MANAGER ? (
+                        {appView === APP_VIEW_PRODUCT_MANAGER ? (
+                            <ProductManagerView 
+                                onCreateNew={handleCreateNewProduct}
+                                onProductClick={handleProductClick}
+                                onEditProduct={handleEditProduct}
+                            />
+                        ) : appView === APP_VIEW_PRODUCT_DETAILS ? (
+                            <ProductDetailsView 
+                                product={selectedProduct}
+                                onBack={() => setAppView(APP_VIEW_PRODUCT_MANAGER)}
+                                onEdit={handleEditProduct}
+                                onCreateCampaign={handleCreateCampaignFromProduct}
+                            />
+                        ) : appView === APP_VIEW_PRODUCT_FORM ? (
+                            <ProductFormView 
+                                product={selectedProduct}
+                                onSave={handleProductSaved}
+                                onCancel={() => setAppView(selectedProduct ? APP_VIEW_PRODUCT_DETAILS : APP_VIEW_PRODUCT_MANAGER)}
+                            />
+                        ) : appView === APP_VIEW_CAMPAIGN_MANAGER ? (
                             <CampaignManagerView 
                                 onCreateNew={handleCreateNewCampaign}
                                 onCampaignClick={handleCampaignClick}
