@@ -4295,7 +4295,7 @@ function LeftNav({ onNavigate }) {
                 <div className="mt-8 space-y-1">
                     <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">IDEATION</h2>
                     <a
-                        href="https://vibeads.vercel.app/visuals?brandId=8"
+                        href="https://www.vibertise.com/login"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full flex items-center px-2 py-2 text-sm rounded-lg bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
