@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
 import { loadSampleData } from './sample-data.js';
+import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
 // Create AppContext for sharing app state
 const AppContext = createContext({
@@ -224,6 +225,149 @@ const dbOperations = {
             console.error('Error deleting product:', error);
             return { success: false, error: error.message };
         }
+    },
+
+    // Background change operations
+    addBackgroundVersion: (productId, imageId, backgroundData) => {
+        try {
+            const products = JSON.parse(localStorage.getItem('products') || '[]');
+            const productIndex = products.findIndex(p => p.id === productId);
+            
+            if (productIndex === -1) {
+                return { success: false, error: 'Product not found' };
+            }
+
+            const product = products[productIndex];
+            const imageIndex = product.images.findIndex(img => img.id === imageId);
+            
+            if (imageIndex === -1) {
+                return { success: false, error: 'Image not found' };
+            }
+
+            // Initialize backgroundVersions if it doesn't exist
+            if (!product.images[imageIndex].backgroundVersions) {
+                product.images[imageIndex].backgroundVersions = [];
+            }
+
+            // Add new background version
+            const backgroundVersion = {
+                id: `bg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                url: backgroundData.imageUrl,
+                prompt: backgroundData.prompt,
+                requestId: backgroundData.requestId,
+                processingTime: backgroundData.processingTime,
+                metadata: backgroundData.metadata,
+                created: new Date().toISOString(),
+                isActive: false // Will be set to true when selected
+            };
+
+            product.images[imageIndex].backgroundVersions.push(backgroundVersion);
+            
+            // Update product timestamp
+            product.updated = new Date().toISOString();
+            
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            return { success: true, backgroundVersion, product: product };
+        } catch (error) {
+            console.error('Error adding background version:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    setActiveBackgroundVersion: (productId, imageId, backgroundVersionId) => {
+        try {
+            const products = JSON.parse(localStorage.getItem('products') || '[]');
+            const productIndex = products.findIndex(p => p.id === productId);
+            
+            if (productIndex === -1) {
+                return { success: false, error: 'Product not found' };
+            }
+
+            const product = products[productIndex];
+            const imageIndex = product.images.findIndex(img => img.id === imageId);
+            
+            if (imageIndex === -1) {
+                return { success: false, error: 'Image not found' };
+            }
+
+            const backgroundVersions = product.images[imageIndex].backgroundVersions || [];
+            
+            // Set all versions to inactive
+            backgroundVersions.forEach(version => {
+                version.isActive = false;
+            });
+
+            // Set the selected version to active (null means original image)
+            if (backgroundVersionId !== null) {
+                const versionIndex = backgroundVersions.findIndex(v => v.id === backgroundVersionId);
+                if (versionIndex === -1) {
+                    return { success: false, error: 'Background version not found' };
+                }
+                backgroundVersions[versionIndex].isActive = true;
+            }
+
+            // Update product timestamp
+            product.updated = new Date().toISOString();
+            
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            return { success: true, product: product };
+        } catch (error) {
+            console.error('Error setting active background version:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    deleteBackgroundVersion: (productId, imageId, backgroundVersionId) => {
+        try {
+            const products = JSON.parse(localStorage.getItem('products') || '[]');
+            const productIndex = products.findIndex(p => p.id === productId);
+            
+            if (productIndex === -1) {
+                return { success: false, error: 'Product not found' };
+            }
+
+            const product = products[productIndex];
+            const imageIndex = product.images.findIndex(img => img.id === imageId);
+            
+            if (imageIndex === -1) {
+                return { success: false, error: 'Image not found' };
+            }
+
+            if (!product.images[imageIndex].backgroundVersions) {
+                return { success: false, error: 'No background versions found' };
+            }
+
+            // Remove the background version
+            product.images[imageIndex].backgroundVersions = 
+                product.images[imageIndex].backgroundVersions.filter(v => v.id !== backgroundVersionId);
+
+            // Update product timestamp
+            product.updated = new Date().toISOString();
+            
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            return { success: true, product: product };
+        } catch (error) {
+            console.error('Error deleting background version:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    getActiveImageUrl: (product, imageId) => {
+        try {
+            const image = product.images.find(img => img.id === imageId);
+            if (!image) return null;
+
+            // Check if there's an active background version
+            const activeBackgroundVersion = image.backgroundVersions?.find(v => v.isActive);
+            
+            return activeBackgroundVersion ? activeBackgroundVersion.url : image.url;
+        } catch (error) {
+            console.error('Error getting active image URL:', error);
+            return null;
+        }
     }
 };
 
@@ -234,12 +378,20 @@ const dbOperations = {
  * Displays the application title and potentially navigation/user info.
  */
 function Header() {
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    
+    // Check dark mode status on component mount
+    useEffect(() => {
+        const htmlElement = document.documentElement;
+        setIsDarkMode(htmlElement.classList.contains('dark'));
+    }, []);
+    
     const toggleDarkMode = () => {
         const htmlElement = document.documentElement;
         htmlElement.classList.toggle('dark');
-        // Optionally, store the preference in localStorage
-        const isDarkMode = htmlElement.classList.contains('dark');
-        localStorage.setItem('darkMode', isDarkMode ? 'dark' : 'light');
+        const newDarkMode = htmlElement.classList.contains('dark');
+        setIsDarkMode(newDarkMode);
+        localStorage.setItem('darkMode', newDarkMode ? 'dark' : 'light');
     };
 
     return (
@@ -261,12 +413,21 @@ function Header() {
                     </div>
                     <button
                         type="button"
-                        className="p-2 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                        className="p-2 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
                         onClick={toggleDarkMode}
+                        title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
                     >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                        </svg>
+                        {isDarkMode ? (
+                            // Sun icon for light mode
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        ) : (
+                            // Moon icon for dark mode
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                        )}
                     </button>
                 </div>
             </div>
@@ -3768,12 +3929,24 @@ function ProductFormView({ product = null, onSave, onCancel }) {
 // Add ProductDetailsView component
 function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
     const [campaigns, setCampaigns] = useState([]);
+    const [currentProduct, setCurrentProduct] = useState(product);
+    const [selectedImageId, setSelectedImageId] = useState(null);
+    const [showBackgroundCustomizer, setShowBackgroundCustomizer] = useState(false);
 
     useEffect(() => {
         const allCampaigns = dbOperations.getCampaigns();
         const productCampaigns = allCampaigns.filter(c => c.productId === product.id);
         setCampaigns(productCampaigns);
     }, [product.id]);
+
+    useEffect(() => {
+        setCurrentProduct(product);
+    }, [product]);
+
+    const handleBackgroundChange = (updatedProduct) => {
+        setCurrentProduct(updatedProduct);
+        // Optionally trigger a parent update if needed
+    };
 
     return (
         <div className="p-6">
@@ -3903,25 +4076,55 @@ function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
                 {/* Product Images */}
                 <div>
                     <Card title="Product Images">
-                        {product.images && product.images.length > 0 ? (
+                        {currentProduct.images && currentProduct.images.length > 0 ? (
                             <div className="space-y-3">
-                                {product.images.map((image) => (
-                                    <div key={image.id} className="relative">
-                                        <img
-                                            src={image.url}
-                                            alt={image.altText || product.name}
-                                            className="w-full h-32 object-cover rounded"
-                                        />
-                                        {image.isPrimary && (
-                                            <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
-                                                Primary
+                                {currentProduct.images.map((image) => {
+                                    const activeImageUrl = dbOperations.getActiveImageUrl(currentProduct, image.id) || image.url;
+                                    const hasCustomBackground = image.backgroundVersions?.some(v => v.isActive);
+                                    
+                                    return (
+                                        <div key={image.id} className="relative">
+                                            <img
+                                                src={activeImageUrl}
+                                                alt={image.altText || currentProduct.name}
+                                                className="w-full h-32 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={() => {
+                                                    setSelectedImageId(image.id);
+                                                    setShowBackgroundCustomizer(true);
+                                                }}
+                                            />
+                                            <div className="absolute top-2 left-2 flex gap-1">
+                                                {image.isPrimary && (
+                                                    <span className="bg-green-500 text-white px-2 py-1 text-xs rounded">
+                                                        Primary
+                                                    </span>
+                                                )}
+                                                {hasCustomBackground && (
+                                                    <span className="bg-blue-500 text-white px-2 py-1 text-xs rounded">
+                                                        Custom BG
+                                                    </span>
+                                                )}
                                             </div>
-                                        )}
-                                        {image.altText && (
-                                            <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">{image.altText}</p>
-                                        )}
-                                    </div>
-                                ))}
+                                            <div className="absolute top-2 right-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedImageId(image.id);
+                                                        setShowBackgroundCustomizer(true);
+                                                    }}
+                                                    className="bg-black bg-opacity-50 text-white p-1 rounded hover:bg-opacity-70 transition-all"
+                                                    title="Customize Background"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            {image.altText && (
+                                                <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">{image.altText}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-6">
@@ -3952,6 +4155,40 @@ function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
                     </Card>
                 </div>
             </div>
+
+            {/* Background Customizer Modal */}
+            {showBackgroundCustomizer && selectedImageId && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Customize Background
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowBackgroundCustomizer(false);
+                                        setSelectedImageId(null);
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <BackgroundCustomizer
+                                product={currentProduct}
+                                imageId={selectedImageId}
+                                onBackgroundChange={handleBackgroundChange}
+                                dbOperations={dbOperations}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -3959,13 +4196,20 @@ function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
 // Add new LeftNav component
 function LeftNav({ onNavigate }) {
     const { appView: currentView } = useContext(AppContext);
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    
+    // Check dark mode status on component mount
+    useEffect(() => {
+        const htmlElement = document.documentElement;
+        setIsDarkMode(htmlElement.classList.contains('dark'));
+    }, []);
     
     const toggleDarkMode = () => {
         const htmlElement = document.documentElement;
         htmlElement.classList.toggle('dark');
-        // Optionally, store the preference in localStorage
-        const isDarkMode = htmlElement.classList.contains('dark');
-        localStorage.setItem('darkMode', isDarkMode ? 'dark' : 'light');
+        const newDarkMode = htmlElement.classList.contains('dark');
+        setIsDarkMode(newDarkMode);
+        localStorage.setItem('darkMode', newDarkMode ? 'dark' : 'light');
     };
     
     return (
@@ -3982,13 +4226,21 @@ function LeftNav({ onNavigate }) {
                 />
                 <button
                     type="button"
-                    className="p-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    className="p-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                     onClick={toggleDarkMode}
-                    title="Toggle dark mode"
+                    title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
                 >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
+                    {isDarkMode ? (
+                        // Sun icon for light mode
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                    ) : (
+                        // Moon icon for dark mode
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    )}
                 </button>
             </div>
             
