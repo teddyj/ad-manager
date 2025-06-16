@@ -14,6 +14,7 @@ const VIEW_CREATE_CAMPAIGN = 'create_campaign';
 const VIEW_START = 'start'; // Now the step after campaign creation
 const VIEW_UPLOAD = 'upload';
 const VIEW_URL = 'url';
+const VIEW_PRODUCT_IMAGES = 'product_images';
 const VIEW_CUSTOMIZE = 'customize';
 const VIEW_PUBLISH = 'publish';
 
@@ -26,6 +27,7 @@ const AD_SIZES = [
     { label: 'Medium Rectangle (300x250)', value: '300x250' },
     { label: 'Mobile Leaderboard (320x50)', value: '320x50' },
     { label: 'Mobile Rectangle (320x400)', value: '320x400' },
+    { label: 'Stories and Reels (1080x1920)', value: '1080x1920' },
 ];
 const DEFAULT_AD_SIZE = '300x250'; // Default size
 
@@ -506,10 +508,10 @@ function AdPreviewContent({
         <>
             {/* 1. Headline */}
             <h3 className="text-lg font-bold mb-1 text-gray-800 text-center leading-tight">{headline || "Ad Headline"}</h3>
-            {/* 2. Description */}
-            <p className="text-xs text-gray-600 mb-2 text-center leading-snug">{description || "Description"}</p>
-            {/* 3. Image */}
-            <div className="flex-grow flex items-center justify-center w-full mb-2 overflow-hidden">
+            {/* 2. Description - Limited to 2 lines */}
+            <p className="text-xs text-gray-600 mb-2 text-center leading-snug line-clamp-2">{description || "Description"}</p>
+            {/* 3. Image - Better sized and contained */}
+            <div className="flex items-center justify-center w-full mb-2 overflow-hidden h-28 px-4">
                 {imageSrc ? (
                     <img
                         src={imageSrc}
@@ -644,8 +646,304 @@ function AdPreviewContent({
         </>
     );
 
+    // Specific layout for Mobile Rectangle (320x400)
+    if (adSize === '320x400') {
+        layout = (
+            <>
+                {/* Header with text */}
+                <div className="mb-3">
+                    <h3 className="text-lg font-bold mb-1 text-gray-900 text-center leading-tight">{headline || "Ad Headline"}</h3>
+                    <div 
+                        className="text-sm text-gray-800 text-center leading-normal px-2"
+                        style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}
+                    >
+                        {description || "Description"}
+                    </div>
+                </div>
+                
+                {/* Image - better sized */}
+                <div className="flex items-center justify-center w-full mb-3 overflow-hidden px-4 h-48">
+                    {imageSrc ? (
+                        <img
+                            src={imageSrc}
+                            alt="Ad Preview"
+                            className="max-w-full max-h-full object-contain rounded"
+                            onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/320x400/f87171/ffffff?text=Image+Load+Error'; }}
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-gray-200 rounded flex items-center justify-center text-gray-400 text-sm p-2">
+                            Image Area
+                        </div>
+                    )}
+                </div>
+                
+                {/* CTA at bottom */}
+                <div className="w-full mt-auto">
+                    {ctaType === CTA_TYPE_TEXT && (
+                        <Button variant="primary" size="small" className="w-full truncate" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                            {ctaText || 'Call To Action'}
+                        </Button>
+                    )}
+                    {ctaType === CTA_TYPE_WHERE_TO_BUY && (
+                        <div>
+                            {!isWtbExpanded && (
+                                <div className="bg-black bg-opacity-70 p-2 flex justify-center items-center space-x-2 rounded-lg cursor-pointer">
+                                    <Button variant="light" size="small" onClick={() => handleOpenWtb('online')}>
+                                        Buy Online
+                                    </Button>
+                                    <Button variant="light" size="small" onClick={() => handleOpenWtb('instore')}>
+                                        Find in Store
+                                    </Button>
+                                </div>
+                            )}
+                            {isWtbExpanded && (
+                                <div className="absolute inset-0 flex items-center justify-center z-20">
+                                    <div className="border border-gray-300 bg-white shadow-md rounded-lg p-2 w-[280px]">
+                                        <button
+                                            onClick={() => setIsWtbExpanded(false)}
+                                            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 z-30 p-1 bg-white rounded-full hover:bg-gray-100"
+                                            aria-label="Close where to buy"
+                                        >
+                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                                        </button>
+                                        <div className="flex border-b mb-2 flex-shrink-0">
+                                            <button
+                                                className={`flex-1 py-1.5 text-xs font-medium ${wtbTab === 'online' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                                onClick={() => setWtbTab('online')}
+                                            >
+                                                Buy Online
+                                            </button>
+                                            <button
+                                                className={`flex-1 py-1.5 text-xs font-medium ${wtbTab === 'instore' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                                onClick={() => setWtbTab('instore')}
+                                            >
+                                                Find a Store
+                                            </button>
+                                        </div>
+                                        <div className="max-h-[200px] overflow-y-auto pr-1">
+                                            {wtbTab === 'online' && (
+                                                <div className="space-y-2">
+                                                    {ONLINE_RETAILERS.map(retailer => (
+                                                        <div key={retailer.name} className="flex items-center justify-between space-x-2 p-1.5 hover:bg-gray-50 rounded">
+                                                            <img src={retailer.logo} alt={retailer.name} className="h-5 object-contain flex-shrink-0" />
+                                                            <span className="text-xs text-gray-700 truncate flex-grow text-left ml-2">{retailer.name}</span>
+                                                            <Button variant="secondary" size="small" className="text-[10px] px-2 py-1">
+                                                                Add to Cart
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {wtbTab === 'instore' && (
+                                                <div className="space-y-2">
+                                                    <div className="flex space-x-2 items-center mb-2">
+                                                        <InputField
+                                                            id="store-search-mobile"
+                                                            type="text"
+                                                            value={storeSearchQuery}
+                                                            onChange={(e) => setStoreSearchQuery(e.target.value)}
+                                                            placeholder="City, State or Zip"
+                                                            className="flex-grow text-xs"
+                                                        />
+                                                        <Button variant="primary" size="small" className="px-2 py-1 text-xs">
+                                                            GO
+                                                        </Button>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {NEARBY_STORES.map((store, index) => (
+                                                            <div key={index} className="p-2 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-between cursor-pointer">
+                                                                <div className="flex items-center space-x-2 overflow-hidden">
+                                                                    <img src={store.logo} alt={store.name} className="h-6 w-8 object-contain flex-shrink-0" />
+                                                                    <div className="text-left">
+                                                                        <p className="text-xs font-semibold truncate">{store.name}</p>
+                                                                        <p className="text-[10px] text-gray-600 truncate">{store.address}</p>
+                                                                        <div className="flex items-center space-x-2 text-[10px] text-gray-500 mt-0.5">
+                                                                            <span>🛒 {store.productCount}</span>
+                                                                            <a href="#" onClick={(e)=>e.preventDefault()} className="hover:text-blue-600 flex items-center">
+                                                                                <span className="mr-0.5">📍</span>
+                                                                                Directions
+                                                                            </a>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right flex-shrink-0 ml-2">
+                                                                    <p className="text-xs font-medium">{store.distance}</p>
+                                                                    <span className="text-blue-600 text-base">&gt;</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </>
+        );
+    }
+    // Specific layout for Stories and Reels (1080x1920)
+    else if (adSize === '1080x1920') {
+        layout = (
+            <div className="h-full flex flex-col">
+                {/* Header with text */}
+                <div className="mb-3 px-3 pt-3">
+                    <h3 className="text-lg font-bold mb-1 text-gray-900 text-center leading-tight">{headline || "Stories Headline"}</h3>
+                    {description && (
+                        <div 
+                            className="text-sm text-gray-800 text-center leading-normal"
+                            style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                            }}
+                        >
+                            {description}
+                        </div>
+                    )}
+                </div>
+                
+                {/* Image - takes most space for stories */}
+                <div className="flex-grow flex items-center justify-center w-full overflow-hidden px-3">
+                    {imageSrc ? (
+                        <img
+                            src={imageSrc}
+                            alt="Ad Preview"
+                            className="max-w-full max-h-full object-contain rounded"
+                            onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1080x1600/f87171/ffffff?text=Image+Load+Error'; }}
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs p-2">
+                            Stories & Reels Image Area
+                        </div>
+                    )}
+                </div>
+                
+                {/* CTA at bottom */}
+                <div className="w-full px-3 pb-3">
+                    <div className="w-full">
+                        {ctaType === CTA_TYPE_TEXT && (
+                            <Button 
+                                variant="primary" 
+                                className="w-full text-xs py-1" 
+                                onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                                title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                            >
+                                {ctaText || 'Swipe Up'}
+                            </Button>
+                        )}
+                        {ctaType === CTA_TYPE_WHERE_TO_BUY && (
+                            <div className="flex space-x-1">
+                                <Button variant="light" className="flex-1 text-xs py-1" onClick={() => handleOpenWtb('online')}>
+                                    Buy Online
+                                </Button>
+                                <Button variant="light" className="flex-1 text-xs py-1" onClick={() => handleOpenWtb('instore')}>
+                                    Find Store
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                {/* Where to Buy expanded view for Stories format */}
+                {isWtbExpanded && (
+                    <div className="absolute inset-0 bg-black bg-opacity-90 flex items-center justify-center z-20">
+                        <div className="bg-white rounded-lg p-6 w-[90%] max-w-md">
+                            {/* Close Button */}
+                            <button
+                                onClick={() => setIsWtbExpanded(false)}
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-30 p-2 bg-white rounded-full hover:bg-gray-100"
+                                aria-label="Close where to buy"
+                            >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path>
+                                </svg>
+                            </button>
+
+                            {/* Tabs */}
+                            <div className="flex border-b mb-4">
+                                <button
+                                    className={`flex-1 py-3 text-base font-medium ${wtbTab === 'online' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                    onClick={() => setWtbTab('online')}
+                                >
+                                    Buy Online
+                                </button>
+                                <button
+                                    className={`flex-1 py-3 text-base font-medium ${wtbTab === 'instore' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                    onClick={() => setWtbTab('instore')}
+                                >
+                                    Find a Store
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {wtbTab === 'online' && (
+                                    <div className="space-y-3">
+                                        {ONLINE_RETAILERS.map(retailer => (
+                                            <div key={retailer.name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded">
+                                                <img src={retailer.logo} alt={retailer.name} className="h-8 object-contain" />
+                                                <Button variant="secondary" className="text-sm px-4 py-2">
+                                                    Add to Cart
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {wtbTab === 'instore' && (
+                                    <div>
+                                        <div className="flex space-x-2 mb-4">
+                                            <InputField
+                                                id="store-search-stories"
+                                                type="text"
+                                                value={storeSearchQuery}
+                                                onChange={(e) => setStoreSearchQuery(e.target.value)}
+                                                placeholder="City, State or Zip"
+                                                className="flex-grow"
+                                            />
+                                            <Button variant="primary" className="px-4 py-2">
+                                                GO
+                                            </Button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {NEARBY_STORES.slice(0, 3).map((store, index) => (
+                                                <div key={index} className="p-3 border rounded bg-gray-50 hover:bg-gray-100">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <img src={store.logo} alt={store.name} className="h-8 w-10 object-contain" />
+                                                            <div>
+                                                                <p className="font-semibold">{store.name}</p>
+                                                                <p className="text-sm text-gray-600 truncate">{store.address}</p>
+                                                                <p className="text-sm text-gray-500">{store.distance} • {store.productCount} products</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-blue-600 text-xl">&gt;</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
     // Specific layout for 320x50
-    if (adSize === '320x50') {
+    else if (adSize === '320x50') {
          // Simplified: No expansion for 320x50, just show basic buttons
          layout = (
              <div className="flex items-center justify-between w-full h-full space-x-2">
@@ -680,7 +978,7 @@ function AdPreviewContent({
                          <img
                              src={imageSrc}
                              alt="Ad"
-                             className="max-w-full max-h-full object-contain rounded-sm"
+                             className="w-full h-full object-cover rounded-sm"
                              onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/40x40/f87171/ffffff?text=Err'; }}
                          />
                       ) : (
@@ -698,12 +996,29 @@ function AdPreviewContent({
         const [width, height] = (sizeString || DEFAULT_AD_SIZE).split('x').map(Number);
         return { width, height };
     };
-    // Get current dimensions for preview styling
-    const currentDimensions = parseSize(adSize);
+    
+    // Get current dimensions for preview styling with scaling for large formats
+    const getPreviewDimensions = (sizeString) => {
+        const originalDimensions = parseSize(sizeString);
+        
+        // Scale down Stories and Reels format for preview
+        if (sizeString === '1080x1920') {
+            const scale = 0.25; // Scale to 25% of original size
+            return {
+                width: Math.round(originalDimensions.width * scale),
+                height: Math.round(originalDimensions.height * scale)
+            };
+        }
+        
+        // Return original dimensions for other formats
+        return originalDimensions;
+    };
+    
+    const currentDimensions = getPreviewDimensions(adSize);
 
     return (
          <div
-            className={`relative bg-white shadow-lg rounded-lg border border-gray-300 overflow-hidden flex transition-all duration-300 ease-in-out ${adSize === '320x50' ? 'p-1' : 'p-3 flex-col items-center'}`} // Add relative positioning here
+            className={`relative bg-white shadow-lg rounded-lg border border-gray-300 overflow-hidden flex transition-all duration-300 ease-in-out ${adSize === '320x50' ? 'p-1' : adSize === '1080x1920' ? 'p-2' : 'p-3 flex-col items-center'}`} // Add relative positioning here
             // Apply dynamic width and height using inline styles
             style={{
                 width: `${currentDimensions.width}px`,
@@ -887,6 +1202,10 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
         selectedProductData?.settings?.defaultRegions || []
     );
 
+    // Get Shoppable Link functionality - NEW
+    const [showShoppableLink, setShowShoppableLink] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+
     const handleDietTypeChange = (value) => {
         if (selectedDietTypes.includes(value)) {
             setSelectedDietTypes(selectedDietTypes.filter(type => type !== value));
@@ -996,6 +1315,35 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
             product: selectedProductData
         };
         onSaveAndExit(campaignSettings);
+    };
+
+    // Handle Get Shoppable Link - NEW
+    const handleGetShoppableLink = async () => {
+        if (!selectedProductData?.productUrl) return;
+
+        // Generate UTM data from current campaign settings
+        const utmData = {
+            utmSource: selectedProductData.utmCodes?.source || 'campaign',
+            utmMedium: selectedProductData.utmCodes?.medium || 'digital',
+            utmCampaign: campaignName.toLowerCase().replace(/\s+/g, '_') || 'campaign',
+            utmContent: selectedProductData.utmCodes?.content || audienceSegment,
+            utmTerm: selectedProductData.utmCodes?.term || ''
+        };
+
+        const trackingUrl = constructTrackingUrl(selectedProductData.productUrl, utmData);
+        
+        // Copy to clipboard
+        try {
+            await navigator.clipboard.writeText(trackingUrl);
+            setCopySuccess(true);
+            setShowShoppableLink(true);
+            
+            // Reset copy success after 3 seconds
+            setTimeout(() => setCopySuccess(false), 3000);
+        } catch (err) {
+            console.error('Failed to copy to clipboard:', err);
+            setShowShoppableLink(true);
+        }
     };
 
     return (
@@ -1243,6 +1591,104 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
                 </div>
             </div>
 
+            {/* Get Shoppable Link Section - NEW */}
+            {selectedProductData?.productUrl && (
+                <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="text-sm font-semibold text-green-800 dark:text-green-300">
+                                🛒 Ready to Generate Shoppable Link
+                            </h4>
+                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                Get a trackable URL for immediate sharing
+                            </p>
+                        </div>
+                        <Button 
+                            onClick={handleGetShoppableLink}
+                            variant="primary"
+                            size="small"
+                            className="bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                        >
+                            Get Shoppable Link
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Shoppable Link Modal - NEW */}
+            {showShoppableLink && selectedProductData?.productUrl && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowShoppableLink(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                🛒 Your Shoppable Link
+                            </h3>
+                            <button 
+                                onClick={() => setShowShoppableLink(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    Campaign: <strong>{campaignName}</strong>
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                    Product: <strong>{selectedProductData.name}</strong>
+                                </p>
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded border">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Generated Tracking URL:</p>
+                                <code className="text-xs text-gray-800 dark:text-gray-200 break-all block">
+                                    {(() => {
+                                        const utmData = {
+                                            utmSource: selectedProductData.utmCodes?.source || 'campaign',
+                                            utmMedium: selectedProductData.utmCodes?.medium || 'digital',
+                                            utmCampaign: campaignName.toLowerCase().replace(/\s+/g, '_') || 'campaign',
+                                            utmContent: selectedProductData.utmCodes?.content || audienceSegment,
+                                            utmTerm: selectedProductData.utmCodes?.term || ''
+                                        };
+                                        return constructTrackingUrl(selectedProductData.productUrl, utmData);
+                                    })()}
+                                </code>
+                            </div>
+                            
+                            {copySuccess && (
+                                <div className="flex items-center text-green-600 dark:text-green-400 text-sm">
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Successfully copied to clipboard!
+                                </div>
+                            )}
+                            
+                            <div className="flex space-x-3">
+                                <Button 
+                                    onClick={handleGetShoppableLink}
+                                    variant="primary"
+                                    className="flex-1"
+                                >
+                                    📋 Copy Again
+                                </Button>
+                                <Button 
+                                    onClick={() => setShowShoppableLink(false)}
+                                    variant="secondary"
+                                    className="flex-1"
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="space-y-3 mt-6">
                 <Button onClick={handleContinue} variant="primary" className="w-full">
                     Add a Creative
@@ -1262,10 +1708,14 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
  * StartScreen Component
  * Step 2: Build Creative. Displays selected campaign/audience info.
  */
-function StartScreen({ onSelectUpload, onSelectUrl, campaignSettings }) {
+function StartScreen({ onSelectUpload, onSelectUrl, onSelectProductImages, campaignSettings }) {
     // Extract info for display, handle null campaignSettings
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
     const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
+    
+    // Check if product has images available
+    const productImages = campaignSettings?.product?.images || [];
+    const hasProductImages = productImages.length > 0;
     
     // Get diet type labels
     const dietTypes = campaignSettings?.audience?.dietOverlay || [];
@@ -1337,13 +1787,18 @@ function StartScreen({ onSelectUpload, onSelectUrl, campaignSettings }) {
             </div>
 
             <p className="text-gray-600 mb-6">How would you like to provide the ad content?</p>
-            <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <div className={`flex flex-col ${hasProductImages ? 'sm:flex-row' : 'sm:flex-row'} justify-center space-y-4 sm:space-y-0 sm:space-x-4`}>
                 <Button onClick={onSelectUpload} variant="primary" className="w-full sm:w-auto">
                     Upload Assets
                 </Button>
                 <Button onClick={onSelectUrl} variant="secondary" className="w-full sm:w-auto">
                     Use Product URL
                 </Button>
+                {hasProductImages && (
+                    <Button onClick={onSelectProductImages} variant="secondary" className="w-full sm:w-auto">
+                        📷 Use Product Images ({productImages.length})
+                    </Button>
+                )}
             </div>
         </Card>
     );
@@ -1541,6 +1996,224 @@ function AssetUpload({ onAssetsUploaded, campaignSettings }) {
             <Button onClick={handleUpload} variant="primary" disabled={!selectedFile || isLoading}>
                 {isLoading ? 'Processing...' : 'Upload & Continue'}
             </Button>
+        </Card>
+    );
+}
+
+/**
+ * ProductImageSelection Component
+ * Step 3c: Select from saved product images.
+ */
+function ProductImageSelection({ onImageSelected, campaignSettings }) {
+    const [selectedImageId, setSelectedImageId] = useState(null);
+    const [creativeName, setCreativeName] = useState(() => 
+        generateNextCreativeName(campaignSettings?.campaign?.name)
+    );
+    const [creativeNameError, setCreativeNameError] = useState('');
+
+    // Extract info for display
+    const campaignName = campaignSettings?.campaign?.name || 'N/A';
+    const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
+    const product = campaignSettings?.product;
+    const productImages = product?.images || [];
+    
+    // Get diet type labels
+    const dietTypes = campaignSettings?.audience?.dietOverlay || [];
+    const dietTypeLabels = dietTypes.map(type => 
+        DIET_TYPE_OPTIONS.find(opt => opt.value === type)?.label
+    ).filter(Boolean);
+
+    // Get retailer labels
+    const retailers = campaignSettings?.audience?.specificRetailers || [];
+    const retailerLabels = retailers.map(retailer => 
+        SPECIFIC_RETAILER_OPTIONS.find(opt => opt.value === retailer)?.label
+    ).filter(Boolean);
+
+    // Get region labels
+    const regions = campaignSettings?.audience?.specificRegions || [];
+    const regionLabels = regions.map(region => 
+        SPECIFIC_REGION_OPTIONS.find(opt => opt.value === region)?.label
+    ).filter(Boolean);
+
+    const handleImageSelect = (imageId) => {
+        setSelectedImageId(imageId);
+    };
+
+    const handleContinue = () => {
+        if (!creativeName.trim()) {
+            setCreativeNameError('Creative Name is required.');
+            return;
+        }
+        if (!selectedImageId) {
+            alert('Please select an image first.');
+            return;
+        }
+
+        const selectedImage = productImages.find(img => img.id === selectedImageId);
+        if (!selectedImage) {
+            alert('Selected image not found.');
+            return;
+        }
+
+        // Use product UTM codes if available
+        const audienceType = campaignSettings?.audience?.type || 'general';
+        
+        let utmData = {
+            utmSource: 'social_media',
+            utmMedium: 'paid_social',
+            utmCampaign: campaignSettings?.campaign?.name?.toLowerCase().replace(/\s+/g, '_') || 'general_campaign',
+            utmContent: `${audienceType}_audience`,
+            utmTerm: ''
+        };
+        
+        // Override with product UTM codes if available
+        if (product?.utmCodes) {
+            utmData = {
+                utmSource: product.utmCodes.source || utmData.utmSource,
+                utmMedium: product.utmCodes.medium || utmData.utmMedium,
+                utmCampaign: product.utmCodes.campaign || utmData.utmCampaign,
+                utmContent: product.utmCodes.content || utmData.utmContent,
+                utmTerm: product.utmCodes.term || utmData.utmTerm
+            };
+        }
+
+        onImageSelected({
+            type: 'product_image',
+            url: selectedImage.url,
+            fileName: selectedImage.fileName || 'product-image',
+            creativeName: creativeName.trim(),
+            title: product?.name || 'Product Title',
+            description: product?.description || 'Product description will be customized in the next step.',
+            productId: product?.id || null,
+            utmData: utmData,
+            imageAltText: selectedImage.altText || '',
+            isPrimaryImage: selectedImage.isPrimary || false
+        });
+    };
+
+    return (
+        <Card title="Step 3: Select Product Image" className="max-w-4xl mx-auto">
+            <div className="text-gray-500 text-sm mb-4 border-b pb-4 text-left">
+                <p className="font-medium text-gray-700 mb-2">Campaign Settings:</p>
+                <p>Campaign Name: <span className="font-medium">{campaignName}</span></p>
+                <p>SPINS Shopper Profile: <span className="font-medium">{audienceTypeLabel}</span></p>
+                <p>Product: <span className="font-medium">{product?.name || 'N/A'}</span></p>
+                
+                {/* Diet Types */}
+                {dietTypeLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Diet Types:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {dietTypeLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Retailers */}
+                {retailerLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Retailers:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {retailerLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Regions */}
+                {regionLabels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-gray-700">Target Regions:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {regionLabels.map((label, index) => (
+                                <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-4">
+                {/* Creative Name Input */}
+                <InputField
+                    id="creativeName"
+                    label="Creative Name"
+                    value={creativeName}
+                    onChange={(e) => {
+                        setCreativeName(e.target.value);
+                        setCreativeNameError('');
+                    }}
+                    placeholder="Enter a name for this creative"
+                    error={creativeNameError}
+                />
+
+                {/* Product Images Grid */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Select an image from {product?.name || 'product'}:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {productImages.map((image) => (
+                            <div 
+                                key={image.id}
+                                className={`relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all ${
+                                    selectedImageId === image.id 
+                                        ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-400' 
+                                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                }`}
+                                onClick={() => handleImageSelect(image.id)}
+                            >
+                                <div className="aspect-w-16 aspect-h-9">
+                                    <img 
+                                        src={image.url} 
+                                        alt={image.altText || 'Product image'}
+                                        className="w-full h-48 object-cover"
+                                    />
+                                </div>
+                                {image.isPrimary && (
+                                    <div className="absolute top-2 left-2">
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                            Primary
+                                        </span>
+                                    </div>
+                                )}
+                                {selectedImageId === image.id && (
+                                    <div className="absolute top-2 right-2">
+                                        <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                )}
+                                {image.altText && (
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
+                                        <p className="text-xs truncate">{image.altText}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <Button 
+                    onClick={handleContinue} 
+                    variant="primary" 
+                    disabled={!selectedImageId}
+                    className="w-full"
+                >
+                    Continue with Selected Image
+                </Button>
+            </div>
         </Card>
     );
 }
@@ -1831,7 +2504,21 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
     // --- State for CTA ---
     const [ctaType, setCtaType] = useState(CTA_TYPE_TEXT);
     const [ctaText, setCtaText] = useState('Shop Now');
-    const [clickUrl, setClickUrl] = useState(adData?.sourceUrl || '');
+    
+    // Initialize Click URL with tracking URL if product and UTM data are available
+    const getInitialClickUrl = () => {
+        const product = campaignSettings?.product;
+        
+        // If we have product URL and UTM data, construct tracking URL
+        if (product?.productUrl && adData?.utmData) {
+            return constructTrackingUrl(product.productUrl, adData.utmData);
+        }
+        
+        // Fall back to source URL or empty string
+        return adData?.sourceUrl || '';
+    };
+    
+    const [clickUrl, setClickUrl] = useState(getInitialClickUrl());
 
     // Determine image source based on input type
     const imageSrc = adData?.url || adData?.imageUrl;
@@ -1931,15 +2618,25 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
                             onChange={(e) => setCtaText(e.target.value)}
                             disabled={ctaType !== CTA_TYPE_TEXT}
                         />
-                         <InputField
-                            id="clickUrl"
-                            label="Click URL (Destination)"
-                            type="url"
-                            value={clickUrl}
-                            onChange={(e) => setClickUrl(e.target.value)}
-                            placeholder="https://example.com/product-page"
-                            disabled={ctaType !== CTA_TYPE_TEXT}
-                        />
+                         <div>
+                            <InputField
+                                id="clickUrl"
+                                label="Click URL (Destination)"
+                                type="url"
+                                value={clickUrl}
+                                onChange={(e) => setClickUrl(e.target.value)}
+                                placeholder="https://example.com/product-page"
+                                disabled={ctaType !== CTA_TYPE_TEXT}
+                            />
+                            {campaignSettings?.product?.productUrl && adData?.utmData && (
+                                <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
+                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Auto-populated with product tracking URL
+                                </p>
+                            )}
+                        </div>
                      </div>
 
                      {/* Note for Where to Buy */}
@@ -3447,6 +4144,10 @@ function App() {
         setCurrentView(VIEW_URL);
     };
 
+    const handleSelectProductImages = () => {
+        setCurrentView(VIEW_PRODUCT_IMAGES);
+    };
+
     // Stores the initial data (image/product info)
     const handleInitialDataReceived = (initialData) => {
         console.log("Initial Data Received:", initialData);
@@ -3590,6 +4291,7 @@ function App() {
                 return <StartScreen
                     onSelectUpload={handleSelectUpload}
                     onSelectUrl={handleSelectUrl}
+                    onSelectProductImages={handleSelectProductImages}
                     campaignSettings={campaignSettings}
                 />;
             case VIEW_UPLOAD:
@@ -3602,6 +4304,11 @@ function App() {
                             onUrlSubmitted={handleInitialDataReceived}
                             campaignSettings={campaignSettings} // Pass campaign settings object
                             onSelectUpload={handleSelectUpload} // Add this prop
+                        />;
+            case VIEW_PRODUCT_IMAGES:
+                return <ProductImageSelection
+                            onImageSelected={handleInitialDataReceived}
+                            campaignSettings={campaignSettings}
                         />;
             case VIEW_CUSTOMIZE:
                 // Pass initial adData and campaign settings
