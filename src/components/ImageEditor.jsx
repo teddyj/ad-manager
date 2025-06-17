@@ -38,6 +38,9 @@ function ImageEditor({
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
+  // Use current background image for resize operations (must be declared early)
+  const workingImage = currentBackgroundImage || originalImage;
+
   // Parse target dimensions
   const targetDimensions = ImageResizeService.parseAdSize(targetAdSize);
 
@@ -322,8 +325,7 @@ function ImageEditor({
     setLocalHistoryIndex(newHistory.length - 1);
   };
 
-  // Use current background image for resize operations
-  const workingImage = currentBackgroundImage || originalImage;
+
 
   // Effect to handle resize mode changes
   useEffect(() => {
