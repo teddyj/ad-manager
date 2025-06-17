@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
+import ImageEditor from './components/ImageEditor.jsx';
 import { loadSampleData } from './sample-data.js';
 import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
@@ -2682,8 +2683,45 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
     
     const [clickUrl, setClickUrl] = useState(getInitialClickUrl());
 
+    // --- State for Image Editing ---
+    const [showImageEditor, setShowImageEditor] = useState(false);
+    const [currentImage, setCurrentImage] = useState(adData?.url || adData?.imageUrl);
+    const [imageHistory, setImageHistory] = useState([adData?.url || adData?.imageUrl]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+
     // Determine image source based on input type
-    const imageSrc = adData?.url || adData?.imageUrl;
+    const imageSrc = currentImage || adData?.url || adData?.imageUrl;
+
+    // --- Image Editing Handlers ---
+    const handleImageEdit = () => {
+        setShowImageEditor(true);
+    };
+
+    const handleImageUpdated = (newImageUrl) => {
+        setCurrentImage(newImageUrl);
+        
+        // Add to history for undo functionality
+        const newHistory = imageHistory.slice(0, historyIndex + 1);
+        newHistory.push(newImageUrl);
+        setImageHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+        
+        setShowImageEditor(false);
+    };
+
+    const handleUndo = () => {
+        if (historyIndex > 0) {
+            setHistoryIndex(historyIndex - 1);
+            setCurrentImage(imageHistory[historyIndex - 1]);
+        }
+    };
+
+    const handleRedo = () => {
+        if (historyIndex < imageHistory.length - 1) {
+            setHistoryIndex(historyIndex + 1);
+            setCurrentImage(imageHistory[historyIndex + 1]);
+        }
+    };
 
     // Extract info for display
     const campaignName = campaignSettings?.campaign?.name || 'N/A';
@@ -2695,6 +2733,8 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
     const handlePreviewAndPublish = () => {
         const customizedAdData = {
             ...adData, // Original data (type, image url, fileName etc.)
+            url: currentImage, // Use the current edited image
+            imageUrl: currentImage, // Ensure both url and imageUrl are updated
             campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign', // Add fallback
             audience: campaignSettings?.audience || { // Add fallback for audience
                 type: DEFAULT_AUDIENCE_TYPE,
@@ -2729,6 +2769,47 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
                     <p>Retailer: <span className="font-medium">{retailerLabel}</span></p>
                  </div>
                 <div className="space-y-4">
+                     {/* Image Editing Section */}
+                     <div className="pb-4 border-b">
+                        <h4 className="font-medium mb-3 text-gray-900 dark:text-white">Image Editing</h4>
+                        <div className="space-y-3">
+                            <button
+                                onClick={handleImageEdit}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center justify-center text-gray-700 dark:text-gray-300"
+                            >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                </svg>
+                                Resize/Crop Image
+                            </button>
+                            
+                            {/* Undo/Redo Controls */}
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={handleUndo}
+                                    disabled={historyIndex <= 0}
+                                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-600 dark:text-gray-400"
+                                >
+                                    ↶ Undo
+                                </button>
+                                <button
+                                    onClick={handleRedo}
+                                    disabled={historyIndex >= imageHistory.length - 1}
+                                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-600 dark:text-gray-400"
+                                >
+                                    ↷ Redo
+                                </button>
+                            </div>
+                            
+                            {/* Edit History Indicator */}
+                            {imageHistory.length > 1 && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                                    Edit {historyIndex + 1} of {imageHistory.length}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                      {/* Ad Size Selection */}
                      <div className="pb-4 border-b">
                         <RadioGroup
@@ -2826,6 +2907,37 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
                  />
                  <p className="text-xs text-gray-500 mt-4 italic">Note: Preview is an approximation. Content may adjust based on size.</p>
             </Card>
+
+            {/* Image Editor Modal */}
+            {showImageEditor && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Resize Image for {adSize}
+                                </h2>
+                                <button
+                                    onClick={() => setShowImageEditor(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <ImageEditor
+                                originalImage={adData?.url || adData?.imageUrl}
+                                targetAdSize={adSize}
+                                onImageUpdated={handleImageUpdated}
+                                onCancel={() => setShowImageEditor(false)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
