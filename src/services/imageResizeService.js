@@ -84,6 +84,88 @@ export class ImageResizeService {
   }
 
   /**
+   * Fit image to target size while maintaining aspect ratio
+   * This will resize the entire image to fit within the target dimensions
+   * @param {File|string} imageSource - File object or data URL
+   * @param {Object} targetSize - {width, height}
+   * @param {number} quality - Quality factor (0.1 - 1.0)
+   * @returns {Promise<string>} - Resized image data URL
+   */
+  static async fitImageToSize(imageSource, targetSize, quality = 0.9) {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        img.onload = () => {
+          try {
+            const { width: targetWidth, height: targetHeight } = targetSize;
+            const targetAspectRatio = targetWidth / targetHeight;
+            const imageAspectRatio = img.width / img.height;
+
+            let drawWidth, drawHeight;
+
+            // Calculate the size to fit the image within target dimensions
+            if (imageAspectRatio > targetAspectRatio) {
+              // Image is wider - fit to width
+              drawWidth = targetWidth;
+              drawHeight = targetWidth / imageAspectRatio;
+            } else {
+              // Image is taller - fit to height
+              drawHeight = targetHeight;
+              drawWidth = targetHeight * imageAspectRatio;
+            }
+
+            // Set canvas to target size
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            // Fill with white background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+            // Center the image on the canvas
+            const offsetX = (targetWidth - drawWidth) / 2;
+            const offsetY = (targetHeight - drawHeight) / 2;
+
+            // Draw the fitted image
+            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+
+            // Convert to data URL
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(dataUrl);
+          } catch (error) {
+            reject(new Error(`Error fitting image: ${error.message}`));
+          }
+        };
+
+        img.onerror = () => {
+          reject(new Error('Failed to load image'));
+        };
+
+        // Handle different image source types
+        if (typeof imageSource === 'string') {
+          img.src = imageSource;
+        } else if (imageSource instanceof File) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            img.src = e.target.result;
+          };
+          reader.onerror = () => {
+            reject(new Error('Failed to read file'));
+          };
+          reader.readAsDataURL(imageSource);
+        } else {
+          reject(new Error('Invalid image source type'));
+        }
+      } catch (error) {
+        reject(new Error(`Error setting up image fit: ${error.message}`));
+      }
+    });
+  }
+
+  /**
    * Get optimal crop area for target aspect ratio (center crop)
    * @param {Object} imageSize - {width, height}
    * @param {Object} targetSize - {width, height}

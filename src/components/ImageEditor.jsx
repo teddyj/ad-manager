@@ -30,6 +30,9 @@ function ImageEditor({
   // Internal history for background changes (separate from parent component)
   const [localImageHistory, setLocalImageHistory] = useState([originalImage]);
   const [localHistoryIndex, setLocalHistoryIndex] = useState(0);
+  
+  // Resize mode state
+  const [resizeMode, setResizeMode] = useState('fit'); // 'fit' or 'crop'
 
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
@@ -215,15 +218,29 @@ function ImageEditor({
 
   // Generate preview
   const generatePreview = useCallback(async () => {
-    if (!originalImage || !cropArea) return;
+    if (!workingImage) return;
+    
+    // For crop mode, we need cropArea; for fit mode, we don't
+    if (resizeMode === 'crop' && !cropArea) return;
 
     try {
       setIsProcessing(true);
-      const resizedImage = await ImageResizeService.resizeImage(
-        originalImage,
-        targetDimensions,
-        { quality, cropArea }
-      );
+      let resizedImage;
+      
+      if (resizeMode === 'fit') {
+        resizedImage = await ImageResizeService.fitImageToSize(
+          workingImage,
+          targetDimensions,
+          quality
+        );
+      } else {
+        resizedImage = await ImageResizeService.resizeImage(
+          workingImage,
+          targetDimensions,
+          { quality, cropArea }
+        );
+      }
+      
       setPreviewImage(resizedImage);
     } catch (error) {
       console.error('Error generating preview:', error);
@@ -231,27 +248,43 @@ function ImageEditor({
     } finally {
       setIsProcessing(false);
     }
-  }, [originalImage, cropArea, targetDimensions, quality]);
+  }, [workingImage, cropArea, targetDimensions, quality, resizeMode]);
 
   // Auto-generate preview when crop area or quality changes
   useEffect(() => {
-    if (cropArea && imageLoaded) {
+    if (imageLoaded && (resizeMode === 'fit' || (resizeMode === 'crop' && cropArea))) {
       const debounceTimer = setTimeout(generatePreview, 300);
       return () => clearTimeout(debounceTimer);
     }
-  }, [cropArea, quality, imageLoaded, generatePreview]);
+  }, [cropArea, quality, imageLoaded, resizeMode, generatePreview]);
 
   // Apply resize
   const handleApplyResize = async () => {
-    if (!originalImage || !cropArea) return;
+    if (!workingImage) return;
+    
+    // For crop mode, we need a crop area; for fit mode, we don't
+    if (resizeMode === 'crop' && !cropArea) return;
 
     try {
       setIsProcessing(true);
-      const resizedImage = await ImageResizeService.resizeImage(
-        originalImage,
-        targetDimensions,
-        { quality, cropArea }
-      );
+      let resizedImage;
+      
+      if (resizeMode === 'fit') {
+        // Fit mode: resize entire image to fit within target dimensions while maintaining aspect ratio
+        resizedImage = await ImageResizeService.fitImageToSize(
+          workingImage,
+          targetDimensions,
+          quality
+        );
+      } else {
+        // Crop mode: use existing crop and resize logic
+        resizedImage = await ImageResizeService.resizeImage(
+          workingImage,
+          targetDimensions,
+          { quality, cropArea }
+        );
+      }
+      
       onImageUpdated(resizedImage);
     } catch (error) {
       console.error('Error applying resize:', error);
@@ -291,6 +324,25 @@ function ImageEditor({
 
   // Use current background image for resize operations
   const workingImage = currentBackgroundImage || originalImage;
+
+  // Effect to handle resize mode changes
+  useEffect(() => {
+    if (resizeMode === 'fit') {
+      // In fit mode, we don't need crop area - clear it
+      setCropArea(null);
+    } else if (resizeMode === 'crop' && !cropArea && imageDimensions) {
+      // In crop mode, set optimal crop if not already set
+      const optimalCrop = ImageResizeService.calculateOptimalCrop(
+        imageDimensions,
+        targetDimensions
+      );
+      setCropArea(optimalCrop);
+      
+      if (imageRef.current) {
+        drawImageOnCanvas(imageRef.current, optimalCrop);
+      }
+    }
+  }, [resizeMode, imageDimensions, targetDimensions, cropArea]);
 
   return (
     <div className="space-y-6">
@@ -344,11 +396,51 @@ function ImageEditor({
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               <div>
-                <h3 className="text-sm font-medium text-blue-800">How to crop</h3>
+                <h3 className="text-sm font-medium text-blue-800">Image Resize Options</h3>
                 <p className="text-sm text-blue-700 mt-1">
-                  Click and drag on the image to select the crop area. The selection will maintain the correct aspect ratio for your target ad size.
+                  Choose how to fit your image to the ad size: resize the whole image to fit, or crop a specific area.
                 </p>
               </div>
+            </div>
+          </div>
+          
+          {/* Resize Mode Selection */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Resize Mode</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="resizeMode"
+                  value="fit"
+                  checked={resizeMode === 'fit'}
+                  onChange={(e) => setResizeMode(e.target.value)}
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">Fit Whole Image</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    Resize entire image to fit ad dimensions while maintaining aspect ratio
+                  </div>
+                </div>
+              </label>
+              
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="resizeMode"
+                  value="crop"
+                  checked={resizeMode === 'crop'}
+                  onChange={(e) => setResizeMode(e.target.value)}
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">Crop to Fit</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    Select a specific area to crop and resize to exact ad dimensions
+                  </div>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -357,8 +449,8 @@ function ImageEditor({
         {imageLoaded ? (
           <canvas
             ref={canvasRef}
-            className="cursor-crosshair mx-auto block"
-            onMouseDown={handleMouseDown}
+            className={`mx-auto block ${resizeMode === 'crop' ? 'cursor-crosshair' : 'cursor-default'}`}
+            onMouseDown={resizeMode === 'crop' ? handleMouseDown : undefined}
           />
         ) : (
           <div className="flex items-center justify-center h-64">
@@ -368,6 +460,13 @@ function ImageEditor({
               </svg>
               <p className="text-gray-500">Loading image...</p>
             </div>
+          </div>
+        )}
+        
+        {/* Mode-specific instructions overlay */}
+        {imageLoaded && (
+          <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+            {resizeMode === 'fit' ? 'Whole image will be resized to fit' : 'Click and drag to select crop area'}
           </div>
         )}
       </div>
@@ -403,13 +502,22 @@ function ImageEditor({
         </div>
 
         <div className="flex items-end">
-          <button
-            onClick={handleResetCrop}
-            disabled={!imageLoaded}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm disabled:opacity-50"
-          >
-            Reset Crop
-          </button>
+          {resizeMode === 'crop' ? (
+            <button
+              onClick={handleResetCrop}
+              disabled={!imageLoaded}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm disabled:opacity-50"
+            >
+              Reset Crop
+            </button>
+          ) : (
+            <div className="w-full text-center">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fit Mode</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Entire image will be resized
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -442,19 +550,19 @@ function ImageEditor({
             >
               Cancel
             </button>
-            <button 
-              onClick={handleApplyResize}
-              disabled={isProcessing || !cropArea || !imageLoaded}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center"
-            >
-              {isProcessing && (
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
-              {isProcessing ? 'Processing...' : 'Apply Resize'}
-            </button>
+                    <button 
+          onClick={handleApplyResize}
+          disabled={isProcessing || (resizeMode === 'crop' && !cropArea) || !imageLoaded}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center"
+        >
+          {isProcessing && (
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
+          {isProcessing ? 'Processing...' : (resizeMode === 'fit' ? 'Apply Resize' : 'Apply Crop & Resize')}
+        </button>
           </div>
         </div>
       )}
