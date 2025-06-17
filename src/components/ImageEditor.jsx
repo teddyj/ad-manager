@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ImageResizeService } from '../services/imageResizeService.js';
 import BackgroundCustomizer from './BackgroundCustomizer.jsx';
+import ProductSizeControls from './ProductSizeControls.jsx';
 
 function ImageEditor({ 
   originalImage, 
@@ -30,6 +31,11 @@ function ImageEditor({
   // Internal history for background changes (separate from parent component)
   const [localImageHistory, setLocalImageHistory] = useState([originalImage]);
   const [localHistoryIndex, setLocalHistoryIndex] = useState(0);
+  
+  // Product sizing state
+  const [activeBackgroundPrompt, setActiveBackgroundPrompt] = useState('');
+  const [sizingError, setSizingError] = useState(null);
+  const [sizingStatus, setSizingStatus] = useState('');
   
   // Always use fit mode (resize whole image)
 
@@ -305,6 +311,16 @@ function ImageEditor({
     setLocalImageHistory(newHistory);
     setLocalHistoryIndex(newHistory.length - 1);
   };
+  
+  const handleProductSizeChange = (newImageUrl) => {
+    setCurrentBackgroundImage(newImageUrl);
+    
+    // Add to local history for product size changes
+    const newHistory = localImageHistory.slice(0, localHistoryIndex + 1);
+    newHistory.push(newImageUrl);
+    setLocalImageHistory(newHistory);
+    setLocalHistoryIndex(newHistory.length - 1);
+  };
 
 
 
@@ -347,6 +363,19 @@ function ImageEditor({
               }`}
             >
               Change Background
+            </button>
+          )}
+          
+          {enableBackgroundChange && (
+            <button
+              onClick={() => setActiveTab('sizing')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'sizing' 
+                  ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              Product Sizing
             </button>
           )}
         </nav>
@@ -504,6 +533,7 @@ function ImageEditor({
             dbOperations={dbOperations}
             mode="creative"
             currentImage={workingImage}
+            onPromptChange={setActiveBackgroundPrompt}
           />
 
           {/* Actions */}
@@ -520,6 +550,100 @@ function ImageEditor({
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
             >
               Apply Background
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Product Sizing Tab */}
+      {activeTab === 'sizing' && enableBackgroundChange && (
+        <div className="space-y-6">
+          {/* Instructions */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <svg className="h-5 w-5 text-purple-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <h3 className="text-sm font-medium text-purple-800">Product Size Adjustment</h3>
+                <p className="text-sm text-purple-700 mt-1">
+                  Adjust how your product appears within the background scene. This creates entirely new images with the product at the desired size.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Error display */}
+          {sizingError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Product Sizing Error
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                    <p>{sizingError}</p>
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      onClick={() => setSizingError(null)}
+                      className="text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 font-medium"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Success status */}
+          {sizingStatus && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    {sizingStatus}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Product Size Controls */}
+          <ProductSizeControls
+            currentImage={currentBackgroundImage}
+            originalProductUrl={originalImage}
+            activeBackgroundPrompt={activeBackgroundPrompt}
+            onImageUpdated={handleProductSizeChange}
+            onError={setSizingError}
+            onStatusUpdate={setSizingStatus}
+          />
+
+          {/* Actions */}
+          <div className="flex justify-end space-x-3 pt-4 border-t">
+            <button 
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => onImageUpdated(currentBackgroundImage)}
+              disabled={!currentBackgroundImage}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+            >
+              Apply Changes
             </button>
           </div>
         </div>

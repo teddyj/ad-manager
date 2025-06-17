@@ -3,6 +3,29 @@
  * Handles canvas-based image resizing and cropping operations
  */
 export class ImageResizeService {
+  
+  /**
+   * Convert external image URL to blob to avoid CORS issues
+   * @param {string} imageUrl - External image URL
+   * @returns {Promise<string>} - Data URL
+   */
+  static async convertImageToDataUrl(imageUrl) {
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      throw new Error(`Error converting image to data URL: ${error.message}`);
+    }
+  }
   /**
    * Resize image to specific dimensions
    * @param {File|string} imageSource - File object or data URL
@@ -64,6 +87,7 @@ export class ImageResizeService {
 
         // Handle different image source types
         if (typeof imageSource === 'string') {
+          img.crossOrigin = 'anonymous'; // Enable CORS for external images
           img.src = imageSource;
         } else if (imageSource instanceof File) {
           const reader = new FileReader();
@@ -92,6 +116,17 @@ export class ImageResizeService {
    * @returns {Promise<string>} - Resized image data URL
    */
   static async fitImageToSize(imageSource, targetSize, quality = 0.9) {
+    // If it's an external URL, try to convert to data URL first to avoid CORS
+    if (typeof imageSource === 'string' && (imageSource.startsWith('http://') || imageSource.startsWith('https://'))) {
+      try {
+        const dataUrl = await this.convertImageToDataUrl(imageSource);
+        return this.fitImageToSize(dataUrl, targetSize, quality);
+      } catch (error) {
+        console.warn('Failed to convert external image, trying direct approach:', error.message);
+        // Fall back to direct approach
+      }
+    }
+
     return new Promise((resolve, reject) => {
       try {
         const canvas = document.createElement('canvas');
@@ -146,6 +181,7 @@ export class ImageResizeService {
 
         // Handle different image source types
         if (typeof imageSource === 'string') {
+          img.crossOrigin = 'anonymous'; // Enable CORS for external images
           img.src = imageSource;
         } else if (imageSource instanceof File) {
           const reader = new FileReader();
@@ -252,6 +288,7 @@ export class ImageResizeService {
       };
 
       if (typeof imageSource === 'string') {
+        img.crossOrigin = 'anonymous'; // Enable CORS for external images
         img.src = imageSource;
       } else if (imageSource instanceof File) {
         const reader = new FileReader();

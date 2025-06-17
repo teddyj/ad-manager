@@ -70,9 +70,10 @@ export class BackgroundService {
    * @param {string} imageUrl - URL of the image to process
    * @param {string} prompt - Background description prompt
    * @param {Object} options - Additional options for the API call
+   * @param {number} productScale - Scale factor for the product (0.1 to 2.0)
    * @returns {Promise<Object>} Result with processed image URL and metadata
    */
-  static async changeBackground(imageUrl, prompt, options = {}) {
+  static async changeBackground(imageUrl, prompt, options = {}, productScale = 1.0) {
     if (!this.isConfigured) {
       throw new Error('Background service not configured');
     }
@@ -92,10 +93,20 @@ export class BackgroundService {
 
       console.log('Starting background change:', { imageUrl, prompt, requestId });
 
+      // Enhance prompt with product scaling context
+      let enhancedPrompt = prompt;
+      if (productScale !== 1.0) {
+        if (productScale < 0.8) {
+          enhancedPrompt += `, with the product appearing smaller and more proportional to the scene`;
+        } else if (productScale > 1.2) {
+          enhancedPrompt += `, with the product appearing larger and more prominent in the scene`;
+        }
+      }
+
       // Prepare API parameters
       const apiParams = {
         image_url: imageUrl,
-        prompt: prompt,
+        prompt: enhancedPrompt,
         ...BACKGROUND_CHANGE_DEFAULTS,
         ...options
       };

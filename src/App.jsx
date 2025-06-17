@@ -689,11 +689,13 @@ function AdPreviewContent({
                 )}
             </div>
             {/* 4. CTA Area */}
-            <div className="w-full mt-auto pt-2"> {/* Removed relative */}
+            <div className="w-full mt-auto pt-2 px-0"> {/* Removed relative */}
                 {ctaType === CTA_TYPE_TEXT && (
-                    <Button variant="primary" size="small" className="w-full truncate" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
-                        {ctaText || 'Call To Action'}
-                    </Button>
+                    <div className="w-full" style={{ maxWidth: '100%', overflow: 'hidden' }}>
+                        <Button variant="primary" size="small" className="truncate !ring-offset-0 !focus:ring-offset-0 block" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                            {ctaText || 'Call To Action'}
+                        </Button>
+                    </div>
                 )}
                 {/* Where to Buy Section - Click to Expand */}
                 {ctaType === CTA_TYPE_WHERE_TO_BUY && (
@@ -847,11 +849,13 @@ function AdPreviewContent({
                 </div>
                 
                 {/* CTA at bottom */}
-                <div className="w-full mt-auto">
+                <div className="w-full mt-auto px-0">
                     {ctaType === CTA_TYPE_TEXT && (
-                        <Button variant="primary" size="small" className="w-full truncate" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
-                            {ctaText || 'Call To Action'}
-                        </Button>
+                        <div className="w-full" style={{ maxWidth: '100%', overflow: 'hidden' }}>
+                            <Button variant="primary" size="small" className="truncate !ring-offset-0 !focus:ring-offset-0 block" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                                {ctaText || 'Call To Action'}
+                            </Button>
+                        </div>
                     )}
                     {ctaType === CTA_TYPE_WHERE_TO_BUY && (
                         <div>
@@ -999,7 +1003,7 @@ function AdPreviewContent({
                         {ctaType === CTA_TYPE_TEXT && (
                             <Button 
                                 variant="primary" 
-                                className="w-full text-xs py-1" 
+                                className="w-full max-w-full text-xs py-1 truncate overflow-hidden" 
                                 onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
                                 title={`Clicks go to: ${clickUrl || 'Not set'}`}
                             >
@@ -1119,7 +1123,7 @@ function AdPreviewContent({
                  {/* Middle: CTA */}
                   <div className="flex-shrink-0">
                       {ctaType === CTA_TYPE_TEXT && (
-                         <Button variant="primary" size="small" className="truncate" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                         <Button variant="primary" size="small" className="truncate overflow-hidden max-w-full" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
                              {ctaText || 'CTA'}
                          </Button>
                      )}
@@ -1185,7 +1189,10 @@ function AdPreviewContent({
             // Apply dynamic width and height using inline styles
             style={{
                 width: `${currentDimensions.width}px`,
-                height: `${currentDimensions.height}px`
+                height: `${currentDimensions.height}px`,
+                boxSizing: 'border-box',
+                maxWidth: `${currentDimensions.width}px`,
+                maxHeight: `${currentDimensions.height}px`
             }}
         >
             {layout}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BackgroundService } from '../services/backgroundService.js';
+import { ImageResizeService } from '../services/imageResizeService.js';
 import { BACKGROUND_STATUS } from '../constants/backgroundPrompts.js';
 import BackgroundPromptSelector from './BackgroundPromptSelector.jsx';
 import BackgroundVersionManager from './BackgroundVersionManager.jsx';
@@ -14,7 +15,8 @@ function BackgroundCustomizer({
   onBackgroundChange, 
   dbOperations,
   mode = "product", // "product" or "creative"
-  currentImage = null // for creative mode
+  currentImage = null, // for creative mode
+  onPromptChange = null // callback to report active prompt
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -41,6 +43,9 @@ function BackgroundCustomizer({
       setError('Background change service is not available');
       return;
     }
+
+    // Report the prompt to parent component
+    onPromptChange?.(prompt);
 
     try {
       setIsProcessing(true);
@@ -147,6 +152,8 @@ function BackgroundCustomizer({
     }
   };
 
+
+
   if (!BackgroundService.isEnabled()) {
     return (
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
@@ -236,6 +243,7 @@ function BackgroundCustomizer({
         <div className="flex justify-center">
           <div className="relative w-64 h-64 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
             <img
+              key={mode === "creative" ? workingImage.url : (dbOperations.getActiveImageUrl(currentProduct, imageId) || workingImage.url)}
               src={mode === "creative" ? workingImage.url : (dbOperations.getActiveImageUrl(currentProduct, imageId) || workingImage.url)}
               alt={workingImage.altText || 'Product image'}
               className="w-full h-full object-contain"
@@ -247,9 +255,12 @@ function BackgroundCustomizer({
                 </span>
               </div>
             )}
+
           </div>
         </div>
       </div>
+
+
 
       {/* Background prompt selector */}
       <BackgroundPromptSelector
