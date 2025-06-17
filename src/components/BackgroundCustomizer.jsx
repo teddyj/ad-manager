@@ -12,18 +12,24 @@ function BackgroundCustomizer({
   product, 
   imageId, 
   onBackgroundChange, 
-  dbOperations 
+  dbOperations,
+  mode = "product", // "product" or "creative"
+  currentImage = null // for creative mode
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [error, setError] = useState(null);
   const [currentProduct, setCurrentProduct] = useState(product);
 
-  // Find the current image
-  const currentImage = currentProduct?.images?.find(img => img.id === imageId);
+  // Find the current image - different logic for product vs creative mode
+  const workingImage = mode === "creative" 
+    ? { url: currentImage, id: imageId } // In creative mode, currentImage is the URL
+    : currentProduct?.images?.find(img => img.id === imageId); // In product mode, find by ID
   
-  // Get current active background version
-  const activeBackgroundVersion = currentImage?.backgroundVersions?.find(v => v.isActive);
+  // Get current active background version (only applies to product mode)
+  const activeBackgroundVersion = mode === "product" 
+    ? workingImage?.backgroundVersions?.find(v => v.isActive)
+    : null;
   const currentActiveVersionId = activeBackgroundVersion?.id || null;
 
   useEffect(() => {
@@ -31,7 +37,7 @@ function BackgroundCustomizer({
   }, [product]);
 
   const handlePromptSelect = async (prompt, description) => {
-    if (!currentImage || !BackgroundService.isEnabled()) {
+    if (!workingImage || !BackgroundService.isEnabled()) {
       setError('Background change service is not available');
       return;
     }
@@ -42,7 +48,7 @@ function BackgroundCustomizer({
       setProcessingStatus('Uploading image...');
 
       // Convert image URL to file for upload
-      const response = await fetch(currentImage.url);
+      const response = await fetch(workingImage.url);
       const blob = await response.blob();
       const file = new File([blob], `product-image.jpg`, { type: 'image/jpeg' });
 
@@ -55,16 +61,9 @@ function BackgroundCustomizer({
       const result = await BackgroundService.changeBackground(uploadedUrl, prompt);
 
       if (result.success) {
-        // Save the new background version to the database
-        const saveResult = dbOperations.addBackgroundVersion(
-          currentProduct.id,
-          imageId,
-          result
-        );
-
-        if (saveResult.success) {
-          setCurrentProduct(saveResult.product);
-          onBackgroundChange?.(saveResult.product);
+        if (mode === "creative") {
+          // In creative mode, directly call the callback with the new image URL
+          onBackgroundChange?.(result.imageUrl);
           setProcessingStatus('Background change completed!');
           
           // Clear success message after a delay
@@ -72,7 +71,25 @@ function BackgroundCustomizer({
             setProcessingStatus('');
           }, 3000);
         } else {
-          throw new Error(saveResult.error);
+          // In product mode, save to database
+          const saveResult = dbOperations.addBackgroundVersion(
+            currentProduct.id,
+            imageId,
+            result
+          );
+
+          if (saveResult.success) {
+            setCurrentProduct(saveResult.product);
+            onBackgroundChange?.(saveResult.product);
+            setProcessingStatus('Background change completed!');
+            
+            // Clear success message after a delay
+            setTimeout(() => {
+              setProcessingStatus('');
+            }, 3000);
+          } else {
+            throw new Error(saveResult.error);
+          }
         }
       } else {
         throw new Error('Background change failed');
@@ -154,7 +171,7 @@ function BackgroundCustomizer({
     );
   }
 
-  if (!currentImage) {
+  if (!workingImage) {
     return (
       <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <p className="text-gray-600 dark:text-gray-400">No image selected for background customization.</p>
@@ -219,11 +236,11 @@ function BackgroundCustomizer({
         <div className="flex justify-center">
           <div className="relative w-64 h-64 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
             <img
-              src={dbOperations.getActiveImageUrl(currentProduct, imageId) || currentImage.url}
-              alt={currentImage.altText || 'Product image'}
+              src={mode === "creative" ? workingImage.url : (dbOperations.getActiveImageUrl(currentProduct, imageId) || workingImage.url)}
+              alt={workingImage.altText || 'Product image'}
               className="w-full h-full object-contain"
             />
-            {activeBackgroundVersion && (
+            {activeBackgroundVersion && mode === "product" && (
               <div className="absolute top-2 right-2">
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                   Custom Background
@@ -258,13 +275,15 @@ function BackgroundCustomizer({
         </div>
       )}
 
-      {/* Background version manager */}
-      <BackgroundVersionManager
-        image={currentImage}
-        onVersionSelect={handleVersionSelect}
-        onVersionDelete={handleVersionDelete}
-        currentActiveVersion={currentActiveVersionId}
-      />
+      {/* Background version manager - only show in product mode */}
+      {mode === "product" && (
+        <BackgroundVersionManager
+          image={workingImage}
+          onVersionSelect={handleVersionSelect}
+          onVersionDelete={handleVersionDelete}
+          currentActiveVersion={currentActiveVersionId}
+        />
+      )}
     </div>
   );
 }

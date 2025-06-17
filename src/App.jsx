@@ -2915,7 +2915,7 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
                         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    Resize Image for {adSize}
+                                    Edit Image for {adSize}
                                 </h2>
                                 <button
                                     onClick={() => setShowImageEditor(false)}
@@ -2933,6 +2933,9 @@ function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive c
                                 targetAdSize={adSize}
                                 onImageUpdated={handleImageUpdated}
                                 onCancel={() => setShowImageEditor(false)}
+                                enableBackgroundChange={true}
+                                product={adData?.product}
+                                dbOperations={dbOperations}
                             />
                         </div>
                     </div>
