@@ -121,6 +121,7 @@ const APP_VIEW_CAMPAIGN_MANAGER = 'campaign_manager';
 const APP_VIEW_CAMPAIGN_BUILDER = 'campaign_builder';
 const APP_VIEW_CAMPAIGN_DETAILS = 'campaign_details';
 const APP_VIEW_AD_PLATFORMS = 'ad_platforms';
+const APP_VIEW_INSIGHTS = 'insights';
 
 // Database Operations (using localStorage as temporary storage)
 const dbOperations = {
@@ -3539,6 +3540,191 @@ function AdPlatformsView() {
     );
 }
 
+// Add Insights View component
+function InsightsView() {
+    return (
+        <div className="p-6">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">Market Insights</h1>
+                <p className="text-lg text-gray-600 dark:text-gray-400">
+                    Comprehensive market intelligence to guide your campaign planning
+                </p>
+            </div>
+
+            {/* Distribution Section */}
+            <div className="mb-8">
+                <Card title="Distribution" className="mb-6">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Brand settings and distribution analysis across different channels
+                        </p>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                            <div className="p-4">
+                                <div className="relative">
+                                    {/* Retail Distribution Map Visualization */}
+                                    <img 
+                                        src="/distribution-map.png"
+                                        alt="Retail Store Distribution Map"
+                                        className="w-full h-auto rounded-lg"
+                                        style={{ maxHeight: '400px', objectFit: 'contain' }}
+                                    />
+                                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-5 transition-all duration-200 rounded-lg cursor-pointer flex items-center justify-center opacity-0 hover:opacity-100">
+                                        <span className="text-white bg-black bg-opacity-50 px-3 py-1 rounded-full text-sm">
+                                            Click to view full analytics
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex justify-between items-center">
+                                    <div className="flex space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                                        <span>Total Stores: <strong className="text-gray-900 dark:text-gray-100">2,847</strong></span>
+                                        <span>•</span>
+                                        <span>Banners: <strong className="text-blue-600 dark:text-blue-400">23 Active</strong></span>
+                                        <span>•</span>
+                                        <span>Metro Areas: <strong className="text-green-600 dark:text-green-400">18 Markets</strong></span>
+                                    </div>
+                                    <Button variant="light" size="small">
+                                        View Full Map
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Grid for other sections */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                {/* Category Section */}
+                <Card title="Category" className="h-fit">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Product category performance and trends
+                        </p>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Health & Wellness</span>
+                                <span className="text-sm text-green-600 dark:text-green-400">+12.5%</span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Organic Foods</span>
+                                <span className="text-sm text-green-600 dark:text-green-400">+8.3%</span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Supplements</span>
+                                <span className="text-sm text-blue-600 dark:text-blue-400">+5.7%</span>
+                            </div>
+                        </div>
+                        <Button variant="light" size="small" className="w-full">
+                            View Detailed Analysis
+                        </Button>
+                    </div>
+                </Card>
+
+                {/* Competitors Section */}
+                <Card title="Competitors" className="h-fit">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Competitive landscape and market positioning
+                        </p>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">A</span>
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Brand Alpha</span>
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">32% share</span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">B</span>
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Brand Beta</span>
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">28% share</span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
+                                        <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">C</span>
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Brand Gamma</span>
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">18% share</span>
+                            </div>
+                        </div>
+                        <Button variant="light" size="small" className="w-full">
+                            Competitive Analysis
+                        </Button>
+                    </div>
+                </Card>
+
+                {/* Products Section */}
+                <Card title="Products" className="h-fit">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Product performance metrics and opportunities
+                        </p>
+                        <div className="space-y-3">
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Top Performing</span>
+                                    <span className="text-xs text-green-600 dark:text-green-400">↗ 15%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                    <div className="bg-green-600 h-2 rounded-full" style={{width: '75%'}}></div>
+                                </div>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Growth Opportunity</span>
+                                    <span className="text-xs text-blue-600 dark:text-blue-400">↗ 8%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                    <div className="bg-blue-600 h-2 rounded-full" style={{width: '45%'}}></div>
+                                </div>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Needs Attention</span>
+                                    <span className="text-xs text-red-600 dark:text-red-400">↘ 3%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                    <div className="bg-red-600 h-2 rounded-full" style={{width: '25%'}}></div>
+                                </div>
+                            </div>
+                        </div>
+                        <Button variant="light" size="small" className="w-full">
+                            Product Deep Dive
+                        </Button>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Bottom Notice */}
+            <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                    </div>
+                    <div className="ml-3">
+                        <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            Enhanced Analytics Coming Soon
+                        </h3>
+                        <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                            <p>Advanced market intelligence features including real-time trend analysis, predictive modeling, and custom dashboard creation will be available in upcoming releases.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // Add ProductImageManager component
 function ProductImageManager({ images, setImages }) {
     const [uploadError, setUploadError] = useState('');
@@ -4246,7 +4432,20 @@ function LeftNav({ onNavigate }) {
             
             <div className="px-4 py-6">
                 <div className="space-y-1">
-                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">DASHBOARD</h2>
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">Planning & Intelligence</h2>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_INSIGHTS)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_INSIGHTS
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
+                        Insights
+                    </button>
                     <button
                         onClick={() => onNavigate(APP_VIEW_PRODUCT_MANAGER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
@@ -4600,6 +4799,7 @@ function App() {
                             appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                             appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
+                            appView === APP_VIEW_INSIGHTS ? 'Market Insights' :
                             'Campaign Builder'}
                         </h2>
                     </div>
@@ -4637,6 +4837,8 @@ function App() {
                             />
                         ) : appView === APP_VIEW_AD_PLATFORMS ? (
                             <AdPlatformsView />
+                        ) : appView === APP_VIEW_INSIGHTS ? (
+                            <InsightsView />
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (
