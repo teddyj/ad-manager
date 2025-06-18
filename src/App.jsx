@@ -123,6 +123,10 @@ const APP_VIEW_CAMPAIGN_BUILDER = 'campaign_builder';
 const APP_VIEW_CAMPAIGN_DETAILS = 'campaign_details';
 const APP_VIEW_AD_PLATFORMS = 'ad_platforms';
 const APP_VIEW_INSIGHTS = 'insights';
+const APP_VIEW_SHOPPABLE_LANDING_PAGES = 'shoppable_landing_pages';
+const APP_VIEW_SHOPPABLE_LINKS = 'shoppable_links';
+const APP_VIEW_SHOPPABLE_RECIPES = 'shoppable_recipes';
+const APP_VIEW_QR_CODES = 'qr_codes';
 
 // Database Operations (using localStorage as temporary storage)
 const dbOperations = {
@@ -3680,6 +3684,126 @@ function AdPlatformsView() {
     );
 }
 
+// Coming Soon Views
+function ComingSoonView({ title, description, icon }) {
+    return (
+        <div className="max-w-4xl mx-auto p-6">
+            <div className="text-center py-20">
+                <div className="flex justify-center mb-6">
+                    <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                        {icon}
+                    </div>
+                </div>
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">{title}</h1>
+                <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">{description}</p>
+                <div className="inline-flex items-center px-6 py-3 border-2 border-blue-200 dark:border-blue-800 rounded-lg">
+                    <svg className="w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-lg font-medium text-blue-700 dark:text-blue-300">Coming Soon</span>
+                </div>
+                <div className="mt-12 bg-gray-50 dark:bg-gray-800 rounded-lg p-8">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">What to expect:</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                        <div className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">Easy Creation</h4>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">Intuitive tools for quick content generation</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">Professional Templates</h4>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">Pre-designed layouts for your brand</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">Analytics Integration</h4>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">Track performance and optimize</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">Multi-Platform Support</h4>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">Deploy across all channels</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ShoppableLandingPagesView() {
+    return (
+        <ComingSoonView 
+            title="Shoppable Landing Pages"
+            description="Create beautiful, conversion-optimized landing pages that let customers shop directly from your content. Perfect for email campaigns, social media, and paid advertising."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                </svg>
+            }
+        />
+    );
+}
+
+function ShoppableLinksView() {
+    return (
+        <ComingSoonView 
+            title="Shoppable Links"
+            description="Transform any link into a shoppable experience. Add product overlays, purchase options, and branded checkout flows to drive direct sales from social posts and content."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                </svg>
+            }
+        />
+    );
+}
+
+function ShoppableRecipesView() {
+    return (
+        <ComingSoonView 
+            title="Shoppable Recipes"
+            description="Create interactive recipe content where customers can shop for ingredients directly. Build engagement and drive sales through cooking inspiration and convenience."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM14 9a1 1 0 011 1v6a1 1 0 11-2 0v-6a1 1 0 011-1zM16 9a1 1 0 011 1v6a1 1 0 11-2 0v-6a1 1 0 011-1z" />
+                </svg>
+            }
+        />
+    );
+}
+
+function QRCodesView() {
+    return (
+        <ComingSoonView 
+            title="QR Codes"
+            description="Generate smart QR codes that connect offline and online experiences. Track scans, customize destinations, and create seamless customer journeys from print to purchase."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V4a1 1 0 011-1h3zm-1 2v1h-1V5h1zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3zm2 2v-1h1v1h-1z" clipRule="evenodd" />
+                </svg>
+            }
+        />
+    );
+}
+
 // Add Insights View component
 function InsightsView() {
     return (
@@ -4629,6 +4753,58 @@ function LeftNav({ onNavigate }) {
                         </svg>
                         Campaign Builder
                     </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_SHOPPABLE_LANDING_PAGES)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_SHOPPABLE_LANDING_PAGES
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                        </svg>
+                        Shoppable Landing Pages
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_SHOPPABLE_LINKS)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_SHOPPABLE_LINKS
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                        </svg>
+                        Shoppable Links
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_SHOPPABLE_RECIPES)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_SHOPPABLE_RECIPES
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM14 9a1 1 0 011 1v6a1 1 0 11-2 0v-6a1 1 0 011-1zM16 9a1 1 0 011 1v6a1 1 0 11-2 0v-6a1 1 0 011-1z" />
+                        </svg>
+                        Shoppable Recipes
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_QR_CODES)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_QR_CODES
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V4a1 1 0 011-1h3zm-1 2v1h-1V5h1zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3zm2 2v-1h1v1h-1zM2 2h16v16H2V2z" clipRule="evenodd" />
+                        </svg>
+                        QR Codes
+                    </button>
                 </div>
 
                 <div className="mt-8 space-y-1">
@@ -4940,6 +5116,10 @@ function App() {
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                             appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
                             appView === APP_VIEW_INSIGHTS ? 'Market Insights' :
+                            appView === APP_VIEW_SHOPPABLE_LANDING_PAGES ? 'Shoppable Landing Pages' :
+                            appView === APP_VIEW_SHOPPABLE_LINKS ? 'Shoppable Links' :
+                            appView === APP_VIEW_SHOPPABLE_RECIPES ? 'Shoppable Recipes' :
+                            appView === APP_VIEW_QR_CODES ? 'QR Codes' :
                             'Campaign Builder'}
                         </h2>
                     </div>
@@ -4979,6 +5159,14 @@ function App() {
                             <AdPlatformsView />
                         ) : appView === APP_VIEW_INSIGHTS ? (
                             <InsightsView />
+                        ) : appView === APP_VIEW_SHOPPABLE_LANDING_PAGES ? (
+                            <ShoppableLandingPagesView />
+                        ) : appView === APP_VIEW_SHOPPABLE_LINKS ? (
+                            <ShoppableLinksView />
+                        ) : appView === APP_VIEW_SHOPPABLE_RECIPES ? (
+                            <ShoppableRecipesView />
+                        ) : appView === APP_VIEW_QR_CODES ? (
+                            <QRCodesView />
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (
