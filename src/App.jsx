@@ -2852,288 +2852,6 @@ function AdCustomization({ adData, campaignSettings, onPublish }) {
         />
     );
 }
-    const [adSize, setAdSize] = useState(DEFAULT_AD_SIZE);
-
-    // --- State for CTA ---
-    const [ctaType, setCtaType] = useState(CTA_TYPE_TEXT);
-    const [ctaText, setCtaText] = useState('Shop Now');
-    
-    // Initialize Click URL with tracking URL if product and UTM data are available
-    const getInitialClickUrl = () => {
-        const product = campaignSettings?.product;
-        
-        // If we have product URL and UTM data, construct tracking URL
-        if (product?.productUrl && adData?.utmData) {
-            return constructTrackingUrl(product.productUrl, adData.utmData);
-        }
-        
-        // Fall back to source URL or empty string
-        return adData?.sourceUrl || '';
-    };
-    
-    const [clickUrl, setClickUrl] = useState(getInitialClickUrl());
-
-    // --- State for Image Editing ---
-    const [showImageEditor, setShowImageEditor] = useState(false);
-    const [currentImage, setCurrentImage] = useState(adData?.url || adData?.imageUrl);
-    const [imageHistory, setImageHistory] = useState([adData?.url || adData?.imageUrl]);
-    const [historyIndex, setHistoryIndex] = useState(0);
-
-    // Determine image source based on input type
-    const imageSrc = currentImage || adData?.url || adData?.imageUrl;
-
-    // --- Image Editing Handlers ---
-    const handleImageEdit = () => {
-        setShowImageEditor(true);
-    };
-
-    const handleImageUpdated = (newImageUrl) => {
-        setCurrentImage(newImageUrl);
-        
-        // Add to history for undo functionality
-        const newHistory = imageHistory.slice(0, historyIndex + 1);
-        newHistory.push(newImageUrl);
-        setImageHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
-        
-        setShowImageEditor(false);
-    };
-
-    const handleUndo = () => {
-        if (historyIndex > 0) {
-            setHistoryIndex(historyIndex - 1);
-            setCurrentImage(imageHistory[historyIndex - 1]);
-        }
-    };
-
-    const handleRedo = () => {
-        if (historyIndex < imageHistory.length - 1) {
-            setHistoryIndex(historyIndex + 1);
-            setCurrentImage(imageHistory[historyIndex + 1]);
-        }
-    };
-
-    // Extract info for display
-    const campaignName = campaignSettings?.campaign?.name || 'N/A';
-    const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.type)?.label || campaignSettings?.audience?.type || 'N/A';
-    const audienceLocationsDisplay = campaignSettings?.audience?.locations?.length > 0 ? campaignSettings.audience.locations.join(', ') : 'Any';
-    const retailerLabel = RETAILER_OPTIONS.find(opt => opt.value === campaignSettings?.audience?.retailer)?.label || campaignSettings?.audience?.retailer || 'N/A';
-
-    // Function to handle publishing (passing customized data)
-    const handlePreviewAndPublish = () => {
-        const customizedAdData = {
-            ...adData, // Original data (type, image url, fileName etc.)
-            url: currentImage, // Use the current edited image
-            imageUrl: currentImage, // Ensure both url and imageUrl are updated
-            campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign', // Add fallback
-            audience: campaignSettings?.audience || { // Add fallback for audience
-                type: DEFAULT_AUDIENCE_TYPE,
-                dietOverlay: [],
-                specificRetailers: [],
-                specificRegions: []
-            },
-            headline,
-            description,
-            adSize,
-            ctaType: ctaType,
-            ctaText: ctaType === CTA_TYPE_TEXT ? ctaText : null,
-            clickUrl: ctaType === CTA_TYPE_TEXT ? clickUrl : null,
-            whereToBuy: {
-                enabled: ctaType === CTA_TYPE_WHERE_TO_BUY,
-                buyOnlineUrl: '#',
-                findInStoreUrl: '#'
-            }
-        };
-        console.log("Passing customized data to publish screen:", customizedAdData);
-        onPublish(customizedAdData);
-    }
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* --- Customization Panel --- */}
-            <Card title="Step 4: Customize Your Ad" className="lg:col-span-1 h-fit sticky top-24">
-                 <div className="text-gray-500 text-sm mb-4 border-b pb-2 text-left">
-                     <p>Campaign: <span className="font-medium">{campaignName}</span></p>
-                     <p>Segment: <span className="font-medium">{audienceTypeLabel}</span></p>
-                    <p>Location(s): <span className="font-medium">{audienceLocationsDisplay}</span></p>
-                    <p>Retailer: <span className="font-medium">{retailerLabel}</span></p>
-                 </div>
-                <div className="space-y-4">
-                     {/* Image Editing Section */}
-                     <div className="pb-4 border-b">
-                        <h4 className="font-medium mb-3 text-gray-900 dark:text-white">Image Editing</h4>
-                        <div className="space-y-3">
-                            <button
-                                onClick={handleImageEdit}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center justify-center text-gray-700 dark:text-gray-300"
-                            >
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
-                                Resize/Crop Image
-                            </button>
-                            
-                            {/* Undo/Redo Controls */}
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={handleUndo}
-                                    disabled={historyIndex <= 0}
-                                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-600 dark:text-gray-400"
-                                >
-                                    ↶ Undo
-                                </button>
-                                <button
-                                    onClick={handleRedo}
-                                    disabled={historyIndex >= imageHistory.length - 1}
-                                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-600 dark:text-gray-400"
-                                >
-                                    ↷ Redo
-                                </button>
-                            </div>
-                            
-                            {/* Edit History Indicator */}
-                            {imageHistory.length > 1 && (
-                                <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                                    Edit {historyIndex + 1} of {imageHistory.length}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                     {/* Ad Size Selection */}
-                     <div className="pb-4 border-b">
-                        <RadioGroup
-                            label="Ad Size"
-                            name="adSize"
-                            selectedValue={adSize}
-                            onChange={(e) => setAdSize(e.target.value)}
-                            options={AD_SIZES}
-                        />
-                    </div>
-
-                    {/* Basic Customization */}
-                    <InputField
-                        id="headline"
-                        label="Headline"
-                        value={headline}
-                        onChange={(e) => setHeadline(e.target.value)}
-                        placeholder="Enter ad headline"
-                    />
-                    <InputField
-                        id="description"
-                        label="Description / Subheadline"
-                        type="textarea"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Enter ad description or subheadline"
-                    />
-
-                    {/* CTA Selection Section */}
-                    <div className="pt-4 border-t mt-4">
-                        <RadioGroup
-                            label="Call To Action Type"
-                            name="ctaType"
-                            selectedValue={ctaType}
-                            onChange={(e) => setCtaType(e.target.value)}
-                            options={[
-                                { label: 'Text Button', value: CTA_TYPE_TEXT },
-                                { label: '"Where to Buy" Overlay', value: CTA_TYPE_WHERE_TO_BUY },
-                            ]}
-                        />
-                    </div>
-
-                     {/* Text CTA Input Fields */}
-                     <div className={`space-y-4 mt-4 ${ctaType !== CTA_TYPE_TEXT ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <InputField
-                            id="cta"
-                            label="Button Text"
-                            value={ctaText}
-                            onChange={(e) => setCtaText(e.target.value)}
-                            disabled={ctaType !== CTA_TYPE_TEXT}
-                        />
-                         <div>
-                            <InputField
-                                id="clickUrl"
-                                label="Click URL (Destination)"
-                                type="url"
-                                value={clickUrl}
-                                onChange={(e) => setClickUrl(e.target.value)}
-                                placeholder="https://example.com/product-page"
-                                disabled={ctaType !== CTA_TYPE_TEXT}
-                            />
-                            {campaignSettings?.product?.productUrl && adData?.utmData && (
-                                <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    Auto-populated with product tracking URL
-                                </p>
-                            )}
-                        </div>
-                     </div>
-
-                     {/* Note for Where to Buy */}
-                      {ctaType === CTA_TYPE_WHERE_TO_BUY && (
-                         <p className="text-xs text-gray-500 mt-2 italic">
-                             The "Where to Buy" overlay will be shown.
-                         </p>
-                     )}
-
-                </div>
-                 <Button onClick={handlePreviewAndPublish} variant="success" className="w-full mt-6">Preview & Publish</Button>
-            </Card>
-
-            {/* --- Ad Preview Panel --- */}
-            <Card title={`Ad Preview (${adSize})`} className="lg:col-span-2 flex flex-col items-center justify-start bg-gray-50 p-4">
-                 {/* Use the AdPreviewContent component */}
-                 <AdPreviewContent
-                    headline={headline}
-                    description={description}
-                    imageSrc={imageSrc}
-                    ctaType={ctaType}
-                    ctaText={ctaText}
-                    clickUrl={clickUrl}
-                    adSize={adSize}
-                 />
-                 <p className="text-xs text-gray-500 mt-4 italic">Note: Preview is an approximation. Content may adjust based on size.</p>
-            </Card>
-
-            {/* Image Editor Modal */}
-            {showImageEditor && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen overflow-y-auto">
-                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    Edit Image for {adSize}
-                                </h2>
-                                <button
-                                    onClick={() => setShowImageEditor(false)}
-                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div className="p-6">
-                            <ImageEditor
-                                originalImage={adData?.url || adData?.imageUrl}
-                                targetAdSize={adSize}
-                                onImageUpdated={handleImageUpdated}
-                                onCancel={() => setShowImageEditor(false)}
-                                enableBackgroundChange={true}
-                                product={adData?.product}
-                                dbOperations={dbOperations}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
 
 /**
  * PublishScreen Component
@@ -3165,7 +2883,45 @@ function PublishScreen({ adData, onBack }) {
         );
     }
 
-    const handleSave = async () => {
+        setIsSaving(true);
+        setSaveStatus(null);
+
+        try {
+            const result = await Promise.resolve(dbOperations.saveAd(adData)); // Simulating async operation
+            
+            if (result.success) {
+                setSaveStatus({
+                    type: 'success',
+                    message: 'Campaign saved successfully!'
+                });
+            } else {
+                // Provide specific error messages based on the error type
+                let errorMessage = 'Failed to save campaign. Please try again.';
+                
+                if (result.error && result.error.includes('quota')) {
+                    const storageInfo = dbOperations.getStorageInfo();
+                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. Older campaigns were automatically cleaned up to make space.`;
+                } else if (result.error && result.error.includes('Storage')) {
+                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
+                } else if (result.error) {
+                    errorMessage = `Save failed: ${result.error}`;
+                }
+                
+                setSaveStatus({
+                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
+                    message: errorMessage
+                });
+            }
+        } catch (error) {
+            console.error('Error in handleSave:', error);
+            setSaveStatus({
+                type: 'error',
+                message: 'An unexpected error occurred while saving. Please try again.'
+            });
+        } finally {
+            setIsSaving(false);
+        }
+    };
         setIsSaving(true);
         setSaveStatus(null);
 
