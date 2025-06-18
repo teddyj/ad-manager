@@ -204,6 +204,8 @@ export class BackgroundService {
       'rate limit',
       'temporary',
       'service unavailable',
+      'failed to fetch',
+      'mixed content',
       '429', // Too Many Requests
       '500', // Internal Server Error
       '502', // Bad Gateway

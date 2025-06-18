@@ -2462,12 +2462,19 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
             
             // Call our backend API to fetch the product image
             console.log('Sending request to API with URL:', url);
-            const response = await fetch('/api/fetch-product-image', {
+            
+            // Build the API URL to ensure it works in production
+            const apiUrl = new URL('/api/fetch-product-image', window.location.origin).toString();
+            
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ url }),
+                // Add production-friendly options
+                credentials: 'same-origin',
+                mode: 'cors'
             });
             
             console.log('Response status:', response.status);
@@ -2553,7 +2560,18 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
             
         } catch (error) {
             console.error('Error fetching product info:', error);
-            setApiError(error.message);
+            
+            // Provide more specific error messages for common production issues
+            let errorMessage = error.message;
+            if (error.message.includes('Failed to fetch')) {
+                errorMessage = 'Unable to connect to the product extraction service. This might be a temporary network issue. Please try again.';
+            } else if (error.message.includes('Mixed Content')) {
+                errorMessage = 'Security error: This product URL cannot be processed due to browser security restrictions. Please try a different URL.';
+            } else if (error.message.includes('CORS')) {
+                errorMessage = 'Cross-origin request blocked. Please try a different product URL or upload an image directly.';
+            }
+            
+            setApiError(errorMessage);
         } finally {
             setIsLoading(false);
         }
