@@ -970,15 +970,15 @@ function AdPreviewContent({
                 </div>
                 
                 {/* CTA at bottom */}
-                <div className="w-full mt-auto px-0">
+                <div className="w-full mt-auto px-0 flex justify-center">
                     {ctaType === CTA_TYPE_TEXT && (
-                        <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+                        <div className="overflow-hidden">
                             <Button 
                                 variant="primary" 
                                 size="small" 
-                                className="truncate !ring-offset-0 !focus:ring-offset-0 block w-full" 
+                                className="truncate !ring-offset-0 !focus:ring-offset-0 px-6 py-2" 
                                 style={{ 
-                                    maxWidth: '100%', 
+                                    maxWidth: '80%', 
                                     boxSizing: 'border-box',
                                     whiteSpace: 'nowrap',
                                     textOverflow: 'ellipsis'
