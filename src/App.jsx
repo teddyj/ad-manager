@@ -137,6 +137,15 @@ const dbOperations = {
             // Get existing campaigns
             const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
             
+            // Create a lightweight campaign entry without large image data
+            const lightweightAdData = {
+                ...adData,
+                // Store image reference instead of full base64 data
+                imageSrc: adData.imageSrc ? '[Image Data - Not Stored]' : null,
+                // Keep other important data but remove large image content
+                originalImage: adData.originalImage ? '[Original Image - Not Stored]' : null
+            };
+            
             // Create a new campaign entry
             const newCampaign = {
                 id: String(Date.now()), // Generate a unique ID
@@ -149,18 +158,67 @@ const dbOperations = {
                 budget: '$0.00', // Default budget
                 starts: 'Not Set',
                 ends: 'Not Set',
-                adData: adData // Store the complete ad data
+                adData: lightweightAdData // Store lightweight ad data without images
             };
 
-            // Add to campaigns list
-            existingCampaigns.push(newCampaign);
-            
-            // Save back to storage
-            localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+            // Check storage space before saving
+            const testData = JSON.stringify([...existingCampaigns, newCampaign]);
+            if (testData.length > 4.5 * 1024 * 1024) { // 4.5MB limit to be safe
+                // If too large, keep only the most recent 50 campaigns
+                const recentCampaigns = existingCampaigns.slice(-49); // Keep 49, add 1 new = 50 total
+                const finalCampaigns = [...recentCampaigns, newCampaign];
+                localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
+                console.warn('Storage limit reached. Keeping only 50 most recent campaigns.');
+            } else {
+                // Add to campaigns list
+                existingCampaigns.push(newCampaign);
+                localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+            }
             
             return { success: true, campaign: newCampaign };
         } catch (error) {
             console.error('Error saving campaign:', error);
+            
+            // If still failing due to quota, try emergency cleanup
+            if (error.name === 'QuotaExceededError') {
+                try {
+                    // Keep only the 10 most recent campaigns and try again
+                    const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                    const recentCampaigns = existingCampaigns.slice(-9); // Keep 9, add 1 new = 10 total
+                    
+                    const lightweightAdData = {
+                        campaignName: adData.campaignName,
+                        productId: adData.productId,
+                        ctaType: adData.ctaType,
+                        adSize: adData.adSize,
+                        audience: adData.audience
+                    };
+                    
+                    const newCampaign = {
+                        id: String(Date.now()),
+                        productId: adData.productId || null,
+                        name: adData.campaignName,
+                        status: 'Draft',
+                        info: true,
+                        created: new Date().toLocaleDateString(),
+                        type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
+                        budget: '$0.00',
+                        starts: 'Not Set',
+                        ends: 'Not Set',
+                        adData: lightweightAdData
+                    };
+                    
+                    const finalCampaigns = [...recentCampaigns, newCampaign];
+                    localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
+                    
+                    console.warn('Emergency storage cleanup performed. Keeping only 10 most recent campaigns.');
+                    return { success: true, campaign: newCampaign };
+                } catch (secondError) {
+                    console.error('Emergency save also failed:', secondError);
+                    return { success: false, error: 'Storage quota exceeded. Please clear browser data.' };
+                }
+            }
+            
             return { success: false, error: error.message };
         }
     },
@@ -171,6 +229,40 @@ const dbOperations = {
         } catch (error) {
             console.error('Error getting campaigns:', error);
             return [];
+        }
+    },
+
+    // Utility function to clear old campaigns if storage is getting full
+    clearOldCampaigns: () => {
+        try {
+            const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+            // Keep only the 20 most recent campaigns
+            const recentCampaigns = campaigns.slice(-20);
+            localStorage.setItem('campaigns', JSON.stringify(recentCampaigns));
+            console.log(`Cleared ${campaigns.length - recentCampaigns.length} old campaigns`);
+            return { success: true, cleared: campaigns.length - recentCampaigns.length };
+        } catch (error) {
+            console.error('Error clearing campaigns:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get storage usage info
+    getStorageInfo: () => {
+        try {
+            const campaigns = JSON.stringify(localStorage.getItem('campaigns') || '[]');
+            const products = JSON.stringify(localStorage.getItem('products') || '[]');
+            const totalSize = campaigns.length + products.length;
+            const maxSize = 5 * 1024 * 1024; // 5MB typical limit
+            return {
+                used: totalSize,
+                max: maxSize,
+                percentage: Math.round((totalSize / maxSize) * 100),
+                campaigns: JSON.parse(localStorage.getItem('campaigns') || '[]').length,
+                products: JSON.parse(localStorage.getItem('products') || '[]').length
+            };
+        } catch (error) {
+            return { used: 0, max: 5242880, percentage: 0, campaigns: 0, products: 0 };
         }
     },
 
@@ -453,6 +545,15 @@ function StepNavigation({ currentView }) {
 
     return (
         <nav aria-label="Progress" className="bg-white shadow-sm rounded-lg mb-6 lg:mb-8 p-4 dark:bg-gray-800">
+            {/* Browser back button indicator */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span>You can use your browser's back button to navigate between steps</span>
+                </div>
+            </div>
             {/* Increased spacing for clarity */}
             <ol role="list" className="flex items-start justify-between space-x-4 md:space-x-8">
                 {STEPS.map((step, index) => {
@@ -3026,15 +3127,28 @@ function PublishScreen({ adData, onBack }) {
                     message: 'Campaign saved successfully!'
                 });
             } else {
+                // Provide specific error messages based on the error type
+                let errorMessage = 'Failed to save campaign. Please try again.';
+                
+                if (result.error && result.error.includes('quota')) {
+                    const storageInfo = dbOperations.getStorageInfo();
+                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. Older campaigns were automatically cleaned up to make space.`;
+                } else if (result.error && result.error.includes('Storage')) {
+                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
+                } else if (result.error) {
+                    errorMessage = `Save failed: ${result.error}`;
+                }
+                
                 setSaveStatus({
-                    type: 'error',
-                    message: 'Failed to save campaign. Please try again.'
+                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
+                    message: errorMessage
                 });
             }
         } catch (error) {
+            console.error('Error in handleSave:', error);
             setSaveStatus({
                 type: 'error',
-                message: 'An error occurred while saving. Please try again.'
+                message: 'An unexpected error occurred while saving. Please try again.'
             });
         } finally {
             setIsSaving(false);
@@ -3060,15 +3174,28 @@ function PublishScreen({ adData, onBack }) {
                     setNavigateToAdPlatforms(true);
                 }, 1500);
             } else {
+                // Provide specific error messages based on the error type
+                let errorMessage = 'Failed to save campaign. Please try again.';
+                
+                if (result.error && result.error.includes('quota')) {
+                    const storageInfo = dbOperations.getStorageInfo();
+                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. The campaign was saved but older campaigns were cleaned up.`;
+                } else if (result.error && result.error.includes('Storage')) {
+                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
+                } else if (result.error) {
+                    errorMessage = `Save failed: ${result.error}`;
+                }
+                
                 setSaveStatus({
-                    type: 'error',
-                    message: 'Failed to save campaign. Please try again.'
+                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
+                    message: errorMessage
                 });
             }
         } catch (error) {
+            console.error('Error in handlePublishToAdPlatform:', error);
             setSaveStatus({
                 type: 'error',
-                message: 'An error occurred while saving. Please try again.'
+                message: 'An unexpected error occurred while saving. Please try again.'
             });
         } finally {
             setIsSaving(false);
@@ -3216,7 +3343,9 @@ function PublishScreen({ adData, onBack }) {
             {/* Save Status Message */}
             {saveStatus && (
                 <div className={`mb-4 p-3 rounded ${
-                    saveStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    saveStatus.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-800 dark:text-green-200' : 
+                    saveStatus.type === 'warning' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-800 dark:text-yellow-200' : 
+                    'bg-red-100 text-red-700 dark:bg-red-800 dark:text-red-200'
                 }`}>
                     {saveStatus.message}
                 </div>
@@ -3828,16 +3957,137 @@ function LocatorsView() {
 }
 
 function AccountView() {
+    const [storageInfo, setStorageInfo] = useState(null);
+    const [isClearing, setIsClearing] = useState(false);
+    const [clearStatus, setClearStatus] = useState(null);
+
+    useEffect(() => {
+        const info = dbOperations.getStorageInfo();
+        setStorageInfo(info);
+    }, []);
+
+    const handleClearOldCampaigns = async () => {
+        setIsClearing(true);
+        setClearStatus(null);
+        
+        try {
+            const result = dbOperations.clearOldCampaigns();
+            if (result.success) {
+                setClearStatus({
+                    type: 'success',
+                    message: `Cleared ${result.cleared} old campaigns successfully!`
+                });
+                // Refresh storage info
+                const newInfo = dbOperations.getStorageInfo();
+                setStorageInfo(newInfo);
+            } else {
+                setClearStatus({
+                    type: 'error',
+                    message: `Failed to clear campaigns: ${result.error}`
+                });
+            }
+        } catch (error) {
+            setClearStatus({
+                type: 'error',
+                message: 'An error occurred while clearing campaigns.'
+            });
+        } finally {
+            setIsClearing(false);
+        }
+    };
+
     return (
-        <ComingSoonView 
-            title="Account Settings"
-            description="Manage your account settings, billing information, tracking pixels, team members, and subscription preferences. Configure integrations and customize your workspace."
-            icon={
-                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+        <div className="p-6 max-w-4xl mx-auto">
+            <div className="flex items-center space-x-2 mb-6">
+                <svg className="w-6 h-6 text-[#F7941D]" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
                 </svg>
-            }
-        />
+                <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Account Settings</h1>
+            </div>
+
+            {/* Storage Management Section */}
+            <Card title="Storage Management" className="mb-6">
+                {storageInfo && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Campaigns</div>
+                                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{storageInfo.campaigns}</div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Products</div>
+                                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{storageInfo.products}</div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Storage Used</div>
+                                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{storageInfo.percentage}%</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                                className={`h-2 rounded-full transition-all duration-300 ${
+                                    storageInfo.percentage > 80 ? 'bg-red-500' :
+                                    storageInfo.percentage > 60 ? 'bg-yellow-500' : 
+                                    'bg-green-500'
+                                }`}
+                                style={{ width: `${Math.min(storageInfo.percentage, 100)}%` }}
+                            ></div>
+                        </div>
+
+                        {storageInfo.percentage > 70 && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                                <div className="flex items-center">
+                                    <svg className="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    <span className="text-yellow-800 dark:text-yellow-200">Storage is getting full. Consider clearing old campaigns.</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {clearStatus && (
+                            <div className={`p-3 rounded-lg ${
+                                clearStatus.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-800 dark:text-green-200' : 
+                                'bg-red-100 text-red-700 dark:bg-red-800 dark:text-red-200'
+                            }`}>
+                                {clearStatus.message}
+                            </div>
+                        )}
+
+                        <div className="flex space-x-3">
+                            <Button 
+                                variant="secondary" 
+                                onClick={handleClearOldCampaigns}
+                                disabled={isClearing}
+                            >
+                                {isClearing ? 'Clearing...' : 'Clear Old Campaigns'}
+                            </Button>
+                            <Button variant="light" disabled>
+                                Export Data (Coming Soon)
+                            </Button>
+                        </div>
+
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Clearing old campaigns will keep your 20 most recent campaigns and remove the rest to free up storage space.
+                        </p>
+                    </div>
+                )}
+            </Card>
+
+            {/* Other Account Settings - Coming Soon */}
+            <Card title="Account Information">
+                <div className="text-center py-8">
+                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Profile & Billing</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                        Account information, billing settings, and team management coming soon.
+                    </p>
+                </div>
+            </Card>
+        </div>
     );
 }
 
@@ -4970,6 +5220,106 @@ function App() {
     // State for product management
     const [selectedProduct, setSelectedProduct] = useState(null);
     
+    // Browser history management for Campaign Builder
+    const updateUrlFragment = (view) => {
+        if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
+            const fragmentMap = {
+                [VIEW_CREATE_CAMPAIGN]: '#campaign-setup',
+                [VIEW_START]: '#asset-source',
+                [VIEW_UPLOAD]: '#upload-assets',
+                [VIEW_URL]: '#url-input',
+                [VIEW_PRODUCT_IMAGES]: '#product-images',
+                [VIEW_CUSTOMIZE]: '#customize',
+                [VIEW_PUBLISH]: '#publish'
+            };
+            
+            const fragment = fragmentMap[view];
+            if (fragment && window.location.hash !== fragment) {
+                // Use replaceState to avoid creating too many history entries during initial setup
+                const method = window.location.hash ? 'pushState' : 'replaceState';
+                window.history[method](null, '', fragment);
+            }
+        }
+    };
+
+    // Handle browser back/forward navigation
+    useEffect(() => {
+        const handlePopState = () => {
+            if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
+                const hash = window.location.hash;
+                const viewMap = {
+                    '#campaign-setup': VIEW_CREATE_CAMPAIGN,
+                    '#asset-source': VIEW_START,
+                    '#upload-assets': VIEW_UPLOAD,
+                    '#url-input': VIEW_URL,
+                    '#product-images': VIEW_PRODUCT_IMAGES,
+                    '#customize': VIEW_CUSTOMIZE,
+                    '#publish': VIEW_PUBLISH
+                };
+                
+                const newView = viewMap[hash];
+                if (newView && newView !== currentView) {
+                    // Validate if the transition is allowed based on current state
+                    const isValidTransition = validateViewTransition(currentView, newView);
+                    if (isValidTransition) {
+                        setCurrentView(newView);
+                    } else {
+                        // If transition is not valid, update URL to match current valid state
+                        updateUrlFragment(currentView);
+                    }
+                }
+            }
+        };
+
+        // Set initial fragment when entering Campaign Builder
+        if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
+            updateUrlFragment(currentView);
+        }
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [appView, currentView]);
+
+    // Validate if a view transition is allowed
+    const validateViewTransition = (fromView, toView) => {
+        // Define valid transitions - users can go back but not skip forward
+        const validTransitions = {
+            [VIEW_CREATE_CAMPAIGN]: [VIEW_START], // Can only go forward to start
+            [VIEW_START]: [VIEW_CREATE_CAMPAIGN, VIEW_UPLOAD, VIEW_URL, VIEW_PRODUCT_IMAGES], // Can go back or to any asset option
+            [VIEW_UPLOAD]: [VIEW_START, VIEW_CUSTOMIZE], // Can go back to start or forward to customize if data exists
+            [VIEW_URL]: [VIEW_START, VIEW_CUSTOMIZE], // Can go back to start or forward to customize if data exists
+            [VIEW_PRODUCT_IMAGES]: [VIEW_START, VIEW_CUSTOMIZE], // Can go back to start or forward to customize if data exists
+            [VIEW_CUSTOMIZE]: [VIEW_UPLOAD, VIEW_URL, VIEW_PRODUCT_IMAGES, VIEW_PUBLISH], // Can go back to any asset view or forward to publish
+            [VIEW_PUBLISH]: [VIEW_CUSTOMIZE] // Can only go back to customize
+        };
+
+        // Always allow going back to campaign creation
+        if (toView === VIEW_CREATE_CAMPAIGN) {
+            return true;
+        }
+
+        // Check if transition is in valid transitions list
+        const allowedFromCurrent = validTransitions[fromView] || [];
+        if (allowedFromCurrent.includes(toView)) {
+            // Additional validation for forward transitions that require data
+            if (toView === VIEW_CUSTOMIZE && !adData) {
+                return false; // Can't go to customize without ad data
+            }
+            if (toView === VIEW_PUBLISH && (!adData || !campaignSettings)) {
+                return false; // Can't go to publish without full data
+            }
+            return true;
+        }
+
+        return false;
+    };
+
+    // Enhanced view change handler that updates URL
+    const setCurrentViewWithHistory = (newView) => {
+        setCurrentView(newView);
+        updateUrlFragment(newView);
+    };
+
     // Initialize dark mode based on saved preference or system preference
     useEffect(() => {
         const savedTheme = localStorage.getItem('darkMode');
@@ -4997,19 +5347,19 @@ function App() {
     const handleCampaignCreated = (settings) => { // Renamed handler
         setCampaignSettings(settings); // Store the campaign settings object
         setAdData(null); // Reset ad data
-        setCurrentView(VIEW_START); // Move to the next step (Upload/URL choice)
+        setCurrentViewWithHistory(VIEW_START); // Move to the next step (Upload/URL choice)
     };
 
     const handleSelectUpload = () => {
-        setCurrentView(VIEW_UPLOAD);
+        setCurrentViewWithHistory(VIEW_UPLOAD);
     };
 
     const handleSelectUrl = () => {
-        setCurrentView(VIEW_URL);
+        setCurrentViewWithHistory(VIEW_URL);
     };
 
     const handleSelectProductImages = () => {
-        setCurrentView(VIEW_PRODUCT_IMAGES);
+        setCurrentViewWithHistory(VIEW_PRODUCT_IMAGES);
     };
 
     // Stores the initial data (image/product info)
@@ -5029,7 +5379,7 @@ function App() {
             utmData: initialData?.utmData || null,
             product: campaignSettings?.product || null
         });
-        setCurrentView(VIEW_CUSTOMIZE); // Move to customization view
+        setCurrentViewWithHistory(VIEW_CUSTOMIZE); // Move to customization view
     };
 
     // Stores the fully customized data before going to publish
@@ -5037,31 +5387,35 @@ function App() {
         // Campaign/Audience info should already be in customizedData from AdCustomization step
         console.log("Final Data for Publish:", customizedData);
         setAdData(customizedData); // Update adData with customizations
-        setCurrentView(VIEW_PUBLISH);
+        setCurrentViewWithHistory(VIEW_PUBLISH);
     }
 
     const handleBackToCustomize = () => {
         // adData already holds the customized data, just switch view
-        setCurrentView(VIEW_CUSTOMIZE);
+        setCurrentViewWithHistory(VIEW_CUSTOMIZE);
     }
 
     // Start Over should go back to Create Campaign now
     const handleStartOver = () => {
         setAdData(null);
         setCampaignSettings(null); // Reset campaign settings
-        setCurrentView(VIEW_CREATE_CAMPAIGN); // Go back to first step
+        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN); // Go back to first step
     }
 
     // Function to switch to Campaign Builder
     const handleCreateNewCampaign = () => {
         setAppView(APP_VIEW_CAMPAIGN_BUILDER);
-        setCurrentView(VIEW_CREATE_CAMPAIGN);
+        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
         setAdData(null);
         setCampaignSettings(null);
     }
 
     // Function to return to Campaign Manager
     const handleReturnToManager = () => {
+        // Clear URL fragment when leaving Campaign Builder
+        if (appView === APP_VIEW_CAMPAIGN_BUILDER && window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname);
+        }
         setAppView(APP_VIEW_CAMPAIGN_MANAGER);
     };
 
@@ -5108,7 +5462,7 @@ function App() {
         // Switch to campaign builder view
         setAppView(APP_VIEW_CAMPAIGN_BUILDER);
         // Go directly to publish screen
-        setCurrentView(VIEW_PUBLISH);
+        setCurrentViewWithHistory(VIEW_PUBLISH);
     };
 
     // Product handlers
@@ -5135,7 +5489,7 @@ function App() {
     const handleCreateCampaignFromProduct = (product) => {
         setSelectedProduct(product);
         setAppView(APP_VIEW_CAMPAIGN_BUILDER);
-        setCurrentView(VIEW_CREATE_CAMPAIGN);
+        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
         setAdData(null);
         setCampaignSettings(null);
     };
@@ -5194,9 +5548,13 @@ function App() {
             <div className="min-h-screen bg-gray-50 flex dark:bg-gray-900">
                 {/* Left Navigation */}
                 <LeftNav onNavigate={(view) => {
+                    // Clear URL fragment when leaving Campaign Builder
+                    if (appView === APP_VIEW_CAMPAIGN_BUILDER && view !== APP_VIEW_CAMPAIGN_BUILDER && window.location.hash) {
+                        window.history.replaceState(null, '', window.location.pathname);
+                    }
                     setAppView(view);
                     if (view === APP_VIEW_CAMPAIGN_BUILDER) {
-                        setCurrentView(VIEW_CREATE_CAMPAIGN);
+                        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
                         setAdData(null);
                         setCampaignSettings(null);
                     }
