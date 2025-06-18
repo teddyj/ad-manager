@@ -127,6 +127,8 @@ const APP_VIEW_SHOPPABLE_LANDING_PAGES = 'shoppable_landing_pages';
 const APP_VIEW_SHOPPABLE_LINKS = 'shoppable_links';
 const APP_VIEW_SHOPPABLE_RECIPES = 'shoppable_recipes';
 const APP_VIEW_QR_CODES = 'qr_codes';
+const APP_VIEW_LOCATORS = 'locators';
+const APP_VIEW_ACCOUNT = 'account';
 
 // Database Operations (using localStorage as temporary storage)
 const dbOperations = {
@@ -611,8 +613,9 @@ function RadioGroup({ label, name, options, selectedValue, onChange }) {
  * Select Dropdown Component
  * Simple select dropdown.
  */
-function SelectDropdown({ id, label, value, onChange, options, disabled = false }) {
+function SelectDropdown({ id, label, value, onChange, options, disabled = false, error = '' }) {
      const disabledStyle = disabled ? "bg-gray-100 cursor-not-allowed dark:bg-gray-700" : "";
+     const errorStyle = error ? "border-red-500 focus:ring-red-400" : "border-gray-300 focus:ring-blue-400";
      return (
         <div className={disabled ? "opacity-50" : ""}>
             <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">{label}</label>
@@ -622,7 +625,7 @@ function SelectDropdown({ id, label, value, onChange, options, disabled = false 
                 value={value}
                 onChange={onChange}
                 disabled={disabled}
-                className={`w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${disabledStyle} bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-blue-500`}
+                className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 ${errorStyle} ${disabledStyle} bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:focus:ring-blue-500`}
             >
                 {options.map(option => (
                     <option key={option.value} value={option.value}>
@@ -630,6 +633,7 @@ function SelectDropdown({ id, label, value, onChange, options, disabled = false 
                     </option>
                 ))}
             </select>
+            {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
         </div>
      );
 }
@@ -1355,6 +1359,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
     });
     
     const [campaignNameError, setCampaignNameError] = useState('');
+    const [productError, setProductError] = useState('');
     
     // Use product defaults if product is selected
     const selectedProductData = products.find(p => p.id === productId) || selectedProduct;
@@ -1407,6 +1412,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
     // Handle product selection change
     const handleProductChange = (newProductId) => {
         setProductId(newProductId);
+        setProductError(''); // Clear product error when product changes
         
         if (newProductId) {
             const product = products.find(p => p.id === newProductId);
@@ -1442,10 +1448,11 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
             return;
         }
         if (!productId && products.length > 0) {
-            setCampaignNameError('Please select a product for this campaign.');
+            setProductError('Please select a product for this campaign.');
             return;
         }
         setCampaignNameError('');
+        setProductError('');
 
         const campaignSettings = {
             campaign: {
@@ -1470,10 +1477,11 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
             return;
         }
         if (!productId && products.length > 0) {
-            setCampaignNameError('Please select a product for this campaign.');
+            setProductError('Please select a product for this campaign.');
             return;
         }
         setCampaignNameError('');
+        setProductError('');
 
         const campaignSettings = {
             campaign: {
@@ -1540,6 +1548,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
                             }))
                         ]}
                         disabled={!!selectedProduct} // Disable if product pre-selected
+                        error={productError}
                     />
                     {selectedProduct && (
                         <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
@@ -3797,7 +3806,35 @@ function QRCodesView() {
             description="Generate smart QR codes that connect offline and online experiences. Track scans, customize destinations, and create seamless customer journeys from print to purchase."
             icon={
                 <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V4a1 1 0 011-1h3zm-1 2v1h-1V5h1zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3zm2 2v-1h1v1h-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V4a1 1 0 011-1h3zm-1 2v1h-1V5h1zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3zm2 2v-1h1v1h-1zM2 2h16v16H2V2z" clipRule="evenodd" />
+                </svg>
+            }
+        />
+    );
+}
+
+function LocatorsView() {
+    return (
+        <ComingSoonView
+            title="Locators"
+            description="Create interactive store locator tools to help customers find your products at nearby retailers. Include maps, filters, and real-time inventory information."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                </svg>
+            }
+        />
+    );
+}
+
+function AccountView() {
+    return (
+        <ComingSoonView 
+            title="Account Settings"
+            description="Manage your account settings, billing information, tracking pixels, team members, and subscription preferences. Configure integrations and customize your workspace."
+            icon={
+                <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
                 </svg>
             }
         />
@@ -4723,24 +4760,11 @@ function LeftNav({ onNavigate }) {
                         </svg>
                         Products
                     </button>
-                    <button
-                        onClick={() => onNavigate(APP_VIEW_CAMPAIGN_MANAGER)}
-                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
-                            currentView === APP_VIEW_CAMPAIGN_MANAGER
-                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
-                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" />
-                        </svg>
-                        Campaign Manager
-                    </button>
                 </div>
                 
                 <div className="mt-8 space-y-1">
                     <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">CREATE</h2>
-                    <button
+                                        <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_BUILDER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
                             currentView === APP_VIEW_CAMPAIGN_BUILDER
@@ -4808,6 +4832,62 @@ function LeftNav({ onNavigate }) {
                 </div>
 
                 <div className="mt-8 space-y-1">
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">MEASUREMENT</h2>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_CAMPAIGN_MANAGER)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_CAMPAIGN_MANAGER
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" />
+                        </svg>
+                        Campaign Manager
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_LOCATORS)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_LOCATORS
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                        Locators
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_SHOPPABLE_LANDING_PAGES)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_SHOPPABLE_LANDING_PAGES
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                        </svg>
+                        Shoppable Landing Pages
+                    </button>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_SHOPPABLE_LINKS)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_SHOPPABLE_LINKS
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                        </svg>
+                        Shoppable Links
+                    </button>
+                </div>
+
+                <div className="mt-8 space-y-1">
                     <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">IDEATION</h2>
                     <a
                         href="https://www.vibertise.com/login"
@@ -4846,7 +4926,24 @@ function LeftNav({ onNavigate }) {
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
                         </svg>
-                        Ad Platforms
+                        Platform Integrations
+                    </button>
+                </div>
+
+                <div className="mt-8 space-y-1">
+                    <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">ACCOUNT</h2>
+                    <button
+                        onClick={() => onNavigate(APP_VIEW_ACCOUNT)}
+                        className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
+                            currentView === APP_VIEW_ACCOUNT
+                                ? 'bg-[#EEF2FF] text-blue-700 dark:text-blue-400 dark:font-semibold'
+                                : 'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                        </svg>
+                        Account
                     </button>
                 </div>
             </div>
@@ -5114,12 +5211,14 @@ function App() {
                             appView === APP_VIEW_PRODUCT_FORM ? (selectedProduct ? `Edit ${selectedProduct.name}` : 'Add New Product') :
                             appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
-                            appView === APP_VIEW_AD_PLATFORMS ? 'Ad Platform Integrations' :
+                            appView === APP_VIEW_AD_PLATFORMS ? 'Platform Integrations' :
                             appView === APP_VIEW_INSIGHTS ? 'Market Insights' :
                             appView === APP_VIEW_SHOPPABLE_LANDING_PAGES ? 'Shoppable Landing Pages' :
                             appView === APP_VIEW_SHOPPABLE_LINKS ? 'Shoppable Links' :
                             appView === APP_VIEW_SHOPPABLE_RECIPES ? 'Shoppable Recipes' :
                             appView === APP_VIEW_QR_CODES ? 'QR Codes' :
+                            appView === APP_VIEW_LOCATORS ? 'Locators' :
+                            appView === APP_VIEW_ACCOUNT ? 'Account Settings' :
                             'Campaign Builder'}
                         </h2>
                     </div>
@@ -5167,6 +5266,10 @@ function App() {
                             <ShoppableRecipesView />
                         ) : appView === APP_VIEW_QR_CODES ? (
                             <QRCodesView />
+                        ) : appView === APP_VIEW_LOCATORS ? (
+                            <LocatorsView />
+                        ) : appView === APP_VIEW_ACCOUNT ? (
+                            <AccountView />
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (
