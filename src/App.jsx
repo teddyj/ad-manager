@@ -800,8 +800,20 @@ function AdPreviewContent({
             {/* 4. CTA Area */}
             <div className="w-full mt-auto pt-2 px-0"> {/* Removed relative */}
                 {ctaType === CTA_TYPE_TEXT && (
-                    <div className="w-full" style={{ maxWidth: '100%', overflow: 'hidden' }}>
-                        <Button variant="primary" size="small" className="truncate !ring-offset-0 !focus:ring-offset-0 block" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                    <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+                        <Button 
+                            variant="primary" 
+                            size="small" 
+                            className="truncate !ring-offset-0 !focus:ring-offset-0 block w-full" 
+                            style={{ 
+                                maxWidth: '100%', 
+                                boxSizing: 'border-box',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis'
+                            }} 
+                            onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                            title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                        >
                             {ctaText || 'Call To Action'}
                         </Button>
                     </div>
@@ -960,8 +972,20 @@ function AdPreviewContent({
                 {/* CTA at bottom */}
                 <div className="w-full mt-auto px-0">
                     {ctaType === CTA_TYPE_TEXT && (
-                        <div className="w-full" style={{ maxWidth: '100%', overflow: 'hidden' }}>
-                            <Button variant="primary" size="small" className="truncate !ring-offset-0 !focus:ring-offset-0 block" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                        <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+                            <Button 
+                                variant="primary" 
+                                size="small" 
+                                className="truncate !ring-offset-0 !focus:ring-offset-0 block w-full" 
+                                style={{ 
+                                    maxWidth: '100%', 
+                                    boxSizing: 'border-box',
+                                    whiteSpace: 'nowrap',
+                                    textOverflow: 'ellipsis'
+                                }} 
+                                onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                                title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                            >
                                 {ctaText || 'Call To Action'}
                             </Button>
                         </div>
@@ -1108,23 +1132,31 @@ function AdPreviewContent({
                 
                 {/* CTA at bottom */}
                 <div className="w-full px-3 pb-3">
-                    <div className="w-full">
+                    <div className="w-full max-w-full">
                         {ctaType === CTA_TYPE_TEXT && (
-                            <Button 
-                                variant="primary" 
-                                className="w-full max-w-full text-xs py-1 truncate overflow-hidden" 
-                                onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
-                                title={`Clicks go to: ${clickUrl || 'Not set'}`}
-                            >
-                                {ctaText || 'Swipe Up'}
-                            </Button>
+                            <div className="w-full overflow-hidden">
+                                <Button 
+                                    variant="primary" 
+                                    className="w-full text-xs py-1 truncate overflow-hidden" 
+                                    style={{ 
+                                        maxWidth: '100%', 
+                                        boxSizing: 'border-box',
+                                        whiteSpace: 'nowrap',
+                                        textOverflow: 'ellipsis'
+                                    }}
+                                    onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                                    title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                                >
+                                    {ctaText || 'Swipe Up'}
+                                </Button>
+                            </div>
                         )}
                         {ctaType === CTA_TYPE_WHERE_TO_BUY && (
-                            <div className="flex space-x-1">
-                                <Button variant="light" className="flex-1 text-xs py-1" onClick={() => handleOpenWtb('online')}>
+                            <div className="flex space-x-1 w-full">
+                                <Button variant="light" className="flex-1 text-xs py-1 truncate" onClick={() => handleOpenWtb('online')}>
                                     Buy Online
                                 </Button>
-                                <Button variant="light" className="flex-1 text-xs py-1" onClick={() => handleOpenWtb('instore')}>
+                                <Button variant="light" className="flex-1 text-xs py-1 truncate" onClick={() => handleOpenWtb('instore')}>
                                     Find Store
                                 </Button>
                             </div>
@@ -1230,9 +1262,21 @@ function AdPreviewContent({
                  </div>
 
                  {/* Middle: CTA */}
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 overflow-hidden">
                       {ctaType === CTA_TYPE_TEXT && (
-                         <Button variant="primary" size="small" className="truncate overflow-hidden max-w-full" onClick={() => clickUrl && window.open(clickUrl, '_blank')} title={`Clicks go to: ${clickUrl || 'Not set'}`}>
+                         <Button 
+                            variant="primary" 
+                            size="small" 
+                            className="truncate overflow-hidden" 
+                            style={{ 
+                                maxWidth: '100%', 
+                                boxSizing: 'border-box',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis'
+                            }}
+                            onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                            title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                         >
                              {ctaText || 'CTA'}
                          </Button>
                      )}
@@ -1301,7 +1345,9 @@ function AdPreviewContent({
                 height: `${currentDimensions.height}px`,
                 boxSizing: 'border-box',
                 maxWidth: `${currentDimensions.width}px`,
-                maxHeight: `${currentDimensions.height}px`
+                maxHeight: `${currentDimensions.height}px`,
+                minWidth: `${currentDimensions.width}px`,
+                minHeight: `${currentDimensions.height}px`
             }}
         >
             {layout}
