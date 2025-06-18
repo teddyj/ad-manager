@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
-import ImageEditor from './components/ImageEditor.jsx';
+import CanvasEditor from './components/canvas/CanvasEditor.jsx';
 import { loadSampleData } from './sample-data.js';
 import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
@@ -2841,10 +2841,17 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
  * AdCustomization Component
  * Step 4: Customize Ad. Includes selected campaign/audience info.
  */
-function AdCustomization({ adData, campaignSettings, onPublish }) { // Receive campaignSettings
-    // --- State for Ad Elements ---
-    const [headline, setHeadline] = useState(adData?.title || 'Your Catchy Headline');
-    const [description, setDescription] = useState(adData?.description || '');
+function AdCustomization({ adData, campaignSettings, onPublish }) {
+    // Use the new Canvas-based Creative Builder
+    return (
+        <CanvasEditor
+            adData={adData}
+            campaignSettings={campaignSettings}
+            onPublish={onPublish}
+            initialAdSize={adData?.adSize || '300x250'}
+        />
+    );
+}
     const [adSize, setAdSize] = useState(DEFAULT_AD_SIZE);
 
     // --- State for CTA ---
