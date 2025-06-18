@@ -798,15 +798,15 @@ function AdPreviewContent({
                 )}
             </div>
             {/* 4. CTA Area */}
-            <div className="w-full mt-auto pt-2 px-0"> {/* Removed relative */}
+            <div className="w-full mt-auto pt-2 px-0 flex justify-center"> {/* Removed relative, added flex justify-center */}
                 {ctaType === CTA_TYPE_TEXT && (
-                    <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+                    <div className="overflow-hidden">
                         <Button 
                             variant="primary" 
                             size="small" 
-                            className="truncate !ring-offset-0 !focus:ring-offset-0 block w-full" 
+                            className="truncate !ring-offset-0 !focus:ring-offset-0 px-6 py-2" 
                             style={{ 
-                                maxWidth: '100%', 
+                                maxWidth: '80%', 
                                 boxSizing: 'border-box',
                                 whiteSpace: 'nowrap',
                                 textOverflow: 'ellipsis'
@@ -1131,32 +1131,30 @@ function AdPreviewContent({
                 </div>
                 
                 {/* CTA at bottom */}
-                <div className="w-full px-3 pb-3">
-                    <div className="w-full max-w-full">
+                <div className="w-full px-3 pb-3 flex justify-center">
+                    <div className="overflow-hidden">
                         {ctaType === CTA_TYPE_TEXT && (
-                            <div className="w-full overflow-hidden">
-                                <Button 
-                                    variant="primary" 
-                                    className="w-full text-xs py-1 truncate overflow-hidden" 
-                                    style={{ 
-                                        maxWidth: '100%', 
-                                        boxSizing: 'border-box',
-                                        whiteSpace: 'nowrap',
-                                        textOverflow: 'ellipsis'
-                                    }}
-                                    onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
-                                    title={`Clicks go to: ${clickUrl || 'Not set'}`}
-                                >
-                                    {ctaText || 'Swipe Up'}
-                                </Button>
-                            </div>
+                            <Button 
+                                variant="primary" 
+                                className="text-xs py-2 px-6 truncate overflow-hidden" 
+                                style={{ 
+                                    maxWidth: '80%', 
+                                    boxSizing: 'border-box',
+                                    whiteSpace: 'nowrap',
+                                    textOverflow: 'ellipsis'
+                                }}
+                                onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
+                                title={`Clicks go to: ${clickUrl || 'Not set'}`}
+                            >
+                                {ctaText || 'Swipe Up'}
+                            </Button>
                         )}
                         {ctaType === CTA_TYPE_WHERE_TO_BUY && (
-                            <div className="flex space-x-1 w-full">
-                                <Button variant="light" className="flex-1 text-xs py-1 truncate" onClick={() => handleOpenWtb('online')}>
+                            <div className="flex space-x-2 justify-center">
+                                <Button variant="light" className="text-xs py-2 px-4 truncate" onClick={() => handleOpenWtb('online')}>
                                     Buy Online
                                 </Button>
-                                <Button variant="light" className="flex-1 text-xs py-1 truncate" onClick={() => handleOpenWtb('instore')}>
+                                <Button variant="light" className="text-xs py-2 px-4 truncate" onClick={() => handleOpenWtb('instore')}>
                                     Find Store
                                 </Button>
                             </div>
