@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useContext, createContext } from 'react';
+import React, { useState, useEffect, useContext, createContext, useMemo } from 'react';
 import spinsLogo from './assets/spins-logo.jpg';
 import CanvasEditor from './components/canvas/CanvasEditor.jsx';
+import ResponsiveCanvas from './components/ResponsiveCanvas.jsx';
 import { loadSampleData } from './sample-data.js';
 import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
@@ -129,347 +130,6 @@ const APP_VIEW_SHOPPABLE_RECIPES = 'shoppable_recipes';
 const APP_VIEW_QR_CODES = 'qr_codes';
 const APP_VIEW_LOCATORS = 'locators';
 const APP_VIEW_ACCOUNT = 'account';
-
-// Database Operations (using localStorage as temporary storage)
-const dbOperations = {
-    saveAd: (adData) => {
-        try {
-            // Get existing campaigns
-            const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-            
-            // Create a lightweight campaign entry without large image data
-            const lightweightAdData = {
-                ...adData,
-                // Store image reference instead of full base64 data
-                imageSrc: adData.imageSrc ? '[Image Data - Not Stored]' : null,
-                // Keep other important data but remove large image content
-                originalImage: adData.originalImage ? '[Original Image - Not Stored]' : null
-            };
-            
-            // Create a new campaign entry
-            const newCampaign = {
-                id: String(Date.now()), // Generate a unique ID
-                productId: adData.productId || null, // NEW: Link to product
-                name: adData.campaignName,
-                status: 'Draft',
-                info: true,
-                created: new Date().toLocaleDateString(),
-                type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
-                budget: '$0.00', // Default budget
-                starts: 'Not Set',
-                ends: 'Not Set',
-                adData: lightweightAdData // Store lightweight ad data without images
-            };
-
-            // Check storage space before saving
-            const testData = JSON.stringify([...existingCampaigns, newCampaign]);
-            if (testData.length > 4.5 * 1024 * 1024) { // 4.5MB limit to be safe
-                // If too large, keep only the most recent 50 campaigns
-                const recentCampaigns = existingCampaigns.slice(-49); // Keep 49, add 1 new = 50 total
-                const finalCampaigns = [...recentCampaigns, newCampaign];
-                localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
-                console.warn('Storage limit reached. Keeping only 50 most recent campaigns.');
-            } else {
-                // Add to campaigns list
-                existingCampaigns.push(newCampaign);
-                localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
-            }
-            
-            return { success: true, campaign: newCampaign };
-        } catch (error) {
-            console.error('Error saving campaign:', error);
-            
-            // If still failing due to quota, try emergency cleanup
-            if (error.name === 'QuotaExceededError') {
-                try {
-                    // Keep only the 10 most recent campaigns and try again
-                    const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-                    const recentCampaigns = existingCampaigns.slice(-9); // Keep 9, add 1 new = 10 total
-                    
-                    const lightweightAdData = {
-                        campaignName: adData.campaignName,
-                        productId: adData.productId,
-                        ctaType: adData.ctaType,
-                        adSize: adData.adSize,
-                        audience: adData.audience
-                    };
-                    
-                    const newCampaign = {
-                        id: String(Date.now()),
-                        productId: adData.productId || null,
-                        name: adData.campaignName,
-                        status: 'Draft',
-                        info: true,
-                        created: new Date().toLocaleDateString(),
-                        type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
-                        budget: '$0.00',
-                        starts: 'Not Set',
-                        ends: 'Not Set',
-                        adData: lightweightAdData
-                    };
-                    
-                    const finalCampaigns = [...recentCampaigns, newCampaign];
-                    localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
-                    
-                    console.warn('Emergency storage cleanup performed. Keeping only 10 most recent campaigns.');
-                    return { success: true, campaign: newCampaign };
-                } catch (secondError) {
-                    console.error('Emergency save also failed:', secondError);
-                    return { success: false, error: 'Storage quota exceeded. Please clear browser data.' };
-                }
-            }
-            
-            return { success: false, error: error.message };
-        }
-    },
-
-    getCampaigns: () => {
-        try {
-            return JSON.parse(localStorage.getItem('campaigns') || '[]');
-        } catch (error) {
-            console.error('Error getting campaigns:', error);
-            return [];
-        }
-    },
-
-    // Utility function to clear old campaigns if storage is getting full
-    clearOldCampaigns: () => {
-        try {
-            const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-            // Keep only the 20 most recent campaigns
-            const recentCampaigns = campaigns.slice(-20);
-            localStorage.setItem('campaigns', JSON.stringify(recentCampaigns));
-            console.log(`Cleared ${campaigns.length - recentCampaigns.length} old campaigns`);
-            return { success: true, cleared: campaigns.length - recentCampaigns.length };
-        } catch (error) {
-            console.error('Error clearing campaigns:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get storage usage info
-    getStorageInfo: () => {
-        try {
-            const campaigns = JSON.stringify(localStorage.getItem('campaigns') || '[]');
-            const products = JSON.stringify(localStorage.getItem('products') || '[]');
-            const totalSize = campaigns.length + products.length;
-            const maxSize = 5 * 1024 * 1024; // 5MB typical limit
-            return {
-                used: totalSize,
-                max: maxSize,
-                percentage: Math.round((totalSize / maxSize) * 100),
-                campaigns: JSON.parse(localStorage.getItem('campaigns') || '[]').length,
-                products: JSON.parse(localStorage.getItem('products') || '[]').length
-            };
-        } catch (error) {
-            return { used: 0, max: 5242880, percentage: 0, campaigns: 0, products: 0 };
-        }
-    },
-
-    // Product operations
-    saveProduct: (productData) => {
-        try {
-            const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-            const newProduct = {
-                id: String(Date.now()),
-                ...productData,
-                created: new Date().toISOString(),
-                updated: new Date().toISOString(),
-                status: productData.status || 'Draft'
-            };
-            existingProducts.push(newProduct);
-            localStorage.setItem('products', JSON.stringify(existingProducts));
-            return { success: true, product: newProduct };
-        } catch (error) {
-            console.error('Error saving product:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    getProducts: () => {
-        try {
-            return JSON.parse(localStorage.getItem('products') || '[]');
-        } catch (error) {
-            console.error('Error getting products:', error);
-            return [];
-        }
-    },
-
-    updateProduct: (productId, updates) => {
-        try {
-            const products = JSON.parse(localStorage.getItem('products') || '[]');
-            const productIndex = products.findIndex(p => p.id === productId);
-            if (productIndex !== -1) {
-                products[productIndex] = {
-                    ...products[productIndex],
-                    ...updates,
-                    updated: new Date().toISOString()
-                };
-                localStorage.setItem('products', JSON.stringify(products));
-                return { success: true, product: products[productIndex] };
-            }
-            return { success: false, error: 'Product not found' };
-        } catch (error) {
-            console.error('Error updating product:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    deleteProduct: (productId) => {
-        try {
-            const products = JSON.parse(localStorage.getItem('products') || '[]');
-            const filteredProducts = products.filter(p => p.id !== productId);
-            localStorage.setItem('products', JSON.stringify(filteredProducts));
-            return { success: true };
-        } catch (error) {
-            console.error('Error deleting product:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Background change operations
-    addBackgroundVersion: (productId, imageId, backgroundData) => {
-        try {
-            const products = JSON.parse(localStorage.getItem('products') || '[]');
-            const productIndex = products.findIndex(p => p.id === productId);
-            
-            if (productIndex === -1) {
-                return { success: false, error: 'Product not found' };
-            }
-
-            const product = products[productIndex];
-            const imageIndex = product.images.findIndex(img => img.id === imageId);
-            
-            if (imageIndex === -1) {
-                return { success: false, error: 'Image not found' };
-            }
-
-            // Initialize backgroundVersions if it doesn't exist
-            if (!product.images[imageIndex].backgroundVersions) {
-                product.images[imageIndex].backgroundVersions = [];
-            }
-
-            // Add new background version
-            const backgroundVersion = {
-                id: `bg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                url: backgroundData.imageUrl,
-                prompt: backgroundData.prompt,
-                requestId: backgroundData.requestId,
-                processingTime: backgroundData.processingTime,
-                metadata: backgroundData.metadata,
-                created: new Date().toISOString(),
-                isActive: false // Will be set to true when selected
-            };
-
-            product.images[imageIndex].backgroundVersions.push(backgroundVersion);
-            
-            // Update product timestamp
-            product.updated = new Date().toISOString();
-            
-            localStorage.setItem('products', JSON.stringify(products));
-            
-            return { success: true, backgroundVersion, product: product };
-        } catch (error) {
-            console.error('Error adding background version:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    setActiveBackgroundVersion: (productId, imageId, backgroundVersionId) => {
-        try {
-            const products = JSON.parse(localStorage.getItem('products') || '[]');
-            const productIndex = products.findIndex(p => p.id === productId);
-            
-            if (productIndex === -1) {
-                return { success: false, error: 'Product not found' };
-            }
-
-            const product = products[productIndex];
-            const imageIndex = product.images.findIndex(img => img.id === imageId);
-            
-            if (imageIndex === -1) {
-                return { success: false, error: 'Image not found' };
-            }
-
-            const backgroundVersions = product.images[imageIndex].backgroundVersions || [];
-            
-            // Set all versions to inactive
-            backgroundVersions.forEach(version => {
-                version.isActive = false;
-            });
-
-            // Set the selected version to active (null means original image)
-            if (backgroundVersionId !== null) {
-                const versionIndex = backgroundVersions.findIndex(v => v.id === backgroundVersionId);
-                if (versionIndex === -1) {
-                    return { success: false, error: 'Background version not found' };
-                }
-                backgroundVersions[versionIndex].isActive = true;
-            }
-
-            // Update product timestamp
-            product.updated = new Date().toISOString();
-            
-            localStorage.setItem('products', JSON.stringify(products));
-            
-            return { success: true, product: product };
-        } catch (error) {
-            console.error('Error setting active background version:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    deleteBackgroundVersion: (productId, imageId, backgroundVersionId) => {
-        try {
-            const products = JSON.parse(localStorage.getItem('products') || '[]');
-            const productIndex = products.findIndex(p => p.id === productId);
-            
-            if (productIndex === -1) {
-                return { success: false, error: 'Product not found' };
-            }
-
-            const product = products[productIndex];
-            const imageIndex = product.images.findIndex(img => img.id === imageId);
-            
-            if (imageIndex === -1) {
-                return { success: false, error: 'Image not found' };
-            }
-
-            if (!product.images[imageIndex].backgroundVersions) {
-                return { success: false, error: 'No background versions found' };
-            }
-
-            // Remove the background version
-            product.images[imageIndex].backgroundVersions = 
-                product.images[imageIndex].backgroundVersions.filter(v => v.id !== backgroundVersionId);
-
-            // Update product timestamp
-            product.updated = new Date().toISOString();
-            
-            localStorage.setItem('products', JSON.stringify(products));
-            
-            return { success: true, product: product };
-        } catch (error) {
-            console.error('Error deleting background version:', error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    getActiveImageUrl: (product, imageId) => {
-        try {
-            const image = product.images.find(img => img.id === imageId);
-            if (!image) return null;
-
-            // Check if there's an active background version
-            const activeBackgroundVersion = image.backgroundVersions?.find(v => v.isActive);
-            
-            return activeBackgroundVersion ? activeBackgroundVersion.url : image.url;
-        } catch (error) {
-            console.error('Error getting active image URL:', error);
-            return null;
-        }
-    }
-};
 
 // --- Helper Components ---
 
@@ -814,8 +474,8 @@ function AdPreviewContent({
                             onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
                             title={`Clicks go to: ${clickUrl || 'Not set'}`}
                         >
-                            {ctaText || 'Call To Action'}
-                        </Button>
+                        {ctaText || 'Call To Action'}
+                    </Button>
                     </div>
                 )}
                 {/* Where to Buy Section - Click to Expand */}
@@ -986,8 +646,8 @@ function AdPreviewContent({
                                 onClick={() => clickUrl && window.open(clickUrl, '_blank')} 
                                 title={`Clicks go to: ${clickUrl || 'Not set'}`}
                             >
-                                {ctaText || 'Call To Action'}
-                            </Button>
+                            {ctaText || 'Call To Action'}
+                        </Button>
                         </div>
                     )}
                     {ctaType === CTA_TYPE_WHERE_TO_BUY && (
@@ -1372,14 +1032,22 @@ function getNextAvailableNumber(prefix, existingNames) {
     return maxNumber + 1;
 }
 
-function generateNextCampaignName() {
+function generateNextCampaignName(dbOperations = null) {
+    if (!dbOperations) {
+        // Simple fallback when dbOperations is not available
+        return `Campaign${Date.now().toString().slice(-4)}`;
+    }
     const campaigns = dbOperations.getCampaigns();
     const existingNames = campaigns.map(c => c.name);
     const nextNumber = getNextAvailableNumber('Campaign', existingNames);
     return `Campaign${nextNumber}`;
 }
 
-function generateNextCreativeName(campaignName) {
+function generateNextCreativeName(campaignName = 'Campaign', dbOperations = null) {
+    if (!dbOperations) {
+        // Simple fallback when dbOperations is not available
+        return `Creative${Date.now().toString().slice(-4)}`;
+    }
     const campaigns = dbOperations.getCampaigns();
     const campaign = campaigns.find(c => c.name === campaignName);
     let existingCreatives = [];
@@ -1418,9 +1086,9 @@ function constructTrackingUrl(baseUrl, utmParams) {
 /**
  * ProductCard Component
  */
-function ProductCard({ product, onView, onEdit }) {
+function ProductCard({ product, onView, onEdit, dbOperations }) {
     const primaryImage = product.images?.find(img => img.isPrimary) || product.images?.[0];
-    const campaignCount = dbOperations.getCampaigns().filter(c => c.productId === product.id).length;
+    const campaignCount = dbOperations ? dbOperations.getCampaigns().filter(c => c.productId === product.id).length : 0;
 
     return (
         <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
@@ -1487,7 +1155,7 @@ function ProductCard({ product, onView, onEdit }) {
 /**
  * CreateCampaignScreen Component - Enhanced for Phase 3
  */
-function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduct = null }) {
+function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduct = null, dbOperations }) {
     // Load available products
     const [products] = useState(() => dbOperations.getProducts());
     const [productId, setProductId] = useState(selectedProduct?.id || '');
@@ -1500,7 +1168,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
             const nextNumber = getNextAvailableNumber('Campaign', productCampaigns.map(c => c.name));
             return `${selectedProduct.name} Campaign ${nextNumber}`;
         }
-        return generateNextCampaignName();
+        return generateNextCampaignName(dbOperations);
     });
     
     const [campaignNameError, setCampaignNameError] = useState('');
@@ -1577,7 +1245,7 @@ function CreateCampaignScreen({ onCampaignCreated, onSaveAndExit, selectedProduc
             }
         } else {
             // Reset to defaults when no product selected
-            setCampaignName(generateNextCampaignName());
+            setCampaignName(generateNextCampaignName(dbOperations));
             setAudienceSegment(DEFAULT_AUDIENCE_TYPE);
             setShowSpecificRetailers(false);
             setSelectedRetailers([]);
@@ -2841,14 +2509,16 @@ function UrlInput({ onUrlSubmitted, campaignSettings, onSelectUpload }) {
  * AdCustomization Component
  * Step 4: Customize Ad. Includes selected campaign/audience info.
  */
-function AdCustomization({ adData, campaignSettings, onPublish }) {
-    // Use the new Canvas-based Creative Builder
+function AdCustomization({ adData, campaignSettings, onPublish, dbOperations }) {
+    // Phase 7: Use ResponsiveCanvas for multi-format support
     return (
-        <CanvasEditor
-            adData={adData}
+        <ResponsiveCanvas
+            initialAdData={adData}
             campaignSettings={campaignSettings}
             onPublish={onPublish}
-            initialAdSize={adData?.adSize || '300x250'}
+            primaryFormat={adData?.adSize || '300x250'}
+            enableMultiFormat={true}
+            dbOperations={dbOperations}
         />
     );
 }
@@ -2882,85 +2552,6 @@ function PublishScreen({ adData, onBack }) {
             </Card>
         );
     }
-
-        setIsSaving(true);
-        setSaveStatus(null);
-
-        try {
-            const result = await Promise.resolve(dbOperations.saveAd(adData)); // Simulating async operation
-            
-            if (result.success) {
-                setSaveStatus({
-                    type: 'success',
-                    message: 'Campaign saved successfully!'
-                });
-            } else {
-                // Provide specific error messages based on the error type
-                let errorMessage = 'Failed to save campaign. Please try again.';
-                
-                if (result.error && result.error.includes('quota')) {
-                    const storageInfo = dbOperations.getStorageInfo();
-                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. Older campaigns were automatically cleaned up to make space.`;
-                } else if (result.error && result.error.includes('Storage')) {
-                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
-                } else if (result.error) {
-                    errorMessage = `Save failed: ${result.error}`;
-                }
-                
-                setSaveStatus({
-                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
-                    message: errorMessage
-                });
-            }
-        } catch (error) {
-            console.error('Error in handleSave:', error);
-            setSaveStatus({
-                type: 'error',
-                message: 'An unexpected error occurred while saving. Please try again.'
-            });
-        } finally {
-            setIsSaving(false);
-        }
-    };
-        setIsSaving(true);
-        setSaveStatus(null);
-
-        try {
-            const result = await Promise.resolve(dbOperations.saveAd(adData)); // Simulating async operation
-            
-            if (result.success) {
-                setSaveStatus({
-                    type: 'success',
-                    message: 'Campaign saved successfully!'
-                });
-            } else {
-                // Provide specific error messages based on the error type
-                let errorMessage = 'Failed to save campaign. Please try again.';
-                
-                if (result.error && result.error.includes('quota')) {
-                    const storageInfo = dbOperations.getStorageInfo();
-                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. Older campaigns were automatically cleaned up to make space.`;
-                } else if (result.error && result.error.includes('Storage')) {
-                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
-                } else if (result.error) {
-                    errorMessage = `Save failed: ${result.error}`;
-                }
-                
-                setSaveStatus({
-                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
-                    message: errorMessage
-                });
-            }
-        } catch (error) {
-            console.error('Error in handleSave:', error);
-            setSaveStatus({
-                type: 'error',
-                message: 'An unexpected error occurred while saving. Please try again.'
-            });
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     const handlePublishToAdPlatform = async (platform) => {
         setIsSaving(true);
@@ -3199,14 +2790,16 @@ function PublishScreen({ adData, onBack }) {
 }
 
 // Add Product Manager component
-function ProductManagerView({ onCreateNew, onProductClick, onEditProduct }) {
+function ProductManagerView({ onCreateNew, onProductClick, onEditProduct, dbOperations }) {
     const [products, setProducts] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        const loadedProducts = dbOperations.getProducts();
-        setProducts(loadedProducts);
-    }, []);
+        if (dbOperations) {
+            const loadedProducts = dbOperations.getProducts();
+            setProducts(loadedProducts);
+        }
+    }, [dbOperations]);
 
     const filteredProducts = products.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -3248,6 +2841,7 @@ function ProductManagerView({ onCreateNew, onProductClick, onEditProduct }) {
                         product={product}
                         onView={() => onProductClick(product)}
                         onEdit={() => onEditProduct(product)}
+                        dbOperations={dbOperations}
                     />
                 ))}
             </div>
@@ -3273,15 +2867,17 @@ function ProductManagerView({ onCreateNew, onProductClick, onEditProduct }) {
 }
 
 // Add Campaign Manager component
-function CampaignManagerView({ onCreateNew, onCampaignClick }) {
+function CampaignManagerView({ onCreateNew, onCampaignClick, dbOperations }) {
     // Get campaigns from storage
     const [campaigns, setCampaigns] = useState([]);
 
     useEffect(() => {
         // Load campaigns when component mounts
-        const loadedCampaigns = dbOperations.getCampaigns();
-        setCampaigns(loadedCampaigns);
-    }, []);
+        if (dbOperations) {
+            const loadedCampaigns = dbOperations.getCampaigns();
+            setCampaigns(loadedCampaigns);
+        }
+    }, [dbOperations]);
 
     return (
         <div className="p-6">
@@ -3384,7 +2980,7 @@ function CampaignManagerView({ onCreateNew, onCampaignClick }) {
 }
 
 // Add CampaignDetailsView component
-function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
+function CampaignDetailsView({ campaign, onBack, onPreviewCreative, dbOperations }) {
     if (!campaign) return null;
 
     // Extract creatives from campaign data
@@ -3395,7 +2991,7 @@ function CampaignDetailsView({ campaign, onBack, onPreviewCreative }) {
     }];
 
     // Get linked product information
-    const linkedProduct = campaign.productId ? dbOperations.getProducts().find(p => p.id === campaign.productId) : null;
+    const linkedProduct = campaign.productId && dbOperations ? dbOperations.getProducts().find(p => p.id === campaign.productId) : null;
 
     return (
         <div className="p-6">
@@ -3763,17 +3359,21 @@ function LocatorsView() {
     );
 }
 
-function AccountView() {
+function AccountView({ dbOperations }) {
     const [storageInfo, setStorageInfo] = useState(null);
     const [isClearing, setIsClearing] = useState(false);
     const [clearStatus, setClearStatus] = useState(null);
 
     useEffect(() => {
-        const info = dbOperations.getStorageInfo();
-        setStorageInfo(info);
-    }, []);
+        if (dbOperations) {
+            const info = dbOperations.getStorageInfo();
+            setStorageInfo(info);
+        }
+    }, [dbOperations]);
 
     const handleClearOldCampaigns = async () => {
+        if (!dbOperations) return;
+        
         setIsClearing(true);
         setClearStatus(null);
         
@@ -3814,7 +3414,7 @@ function AccountView() {
 
             {/* Storage Management Section */}
             <Card title="Storage Management" className="mb-6">
-                {storageInfo && (
+                {storageInfo ? (
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
@@ -3877,6 +3477,15 @@ function AccountView() {
 
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                             Clearing old campaigns will keep your 20 most recent campaigns and remove the rest to free up storage space.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="text-center py-8">
+                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-gray-500 dark:text-gray-400">
+                            Loading storage information...
                         </p>
                     </div>
                 )}
@@ -4471,17 +4080,19 @@ function ProductFormView({ product = null, onSave, onCancel }) {
 }
 
 // Add ProductDetailsView component
-function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
+function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign, dbOperations }) {
     const [campaigns, setCampaigns] = useState([]);
     const [currentProduct, setCurrentProduct] = useState(product);
     const [selectedImageId, setSelectedImageId] = useState(null);
     const [showBackgroundCustomizer, setShowBackgroundCustomizer] = useState(false);
 
     useEffect(() => {
-        const allCampaigns = dbOperations.getCampaigns();
-        const productCampaigns = allCampaigns.filter(c => c.productId === product.id);
-        setCampaigns(productCampaigns);
-    }, [product.id]);
+        if (dbOperations) {
+            const allCampaigns = dbOperations.getCampaigns();
+            const productCampaigns = allCampaigns.filter(c => c.productId === product.id);
+            setCampaigns(productCampaigns);
+        }
+    }, [product.id, dbOperations]);
 
     useEffect(() => {
         setCurrentProduct(product);
@@ -4623,7 +4234,9 @@ function ProductDetailsView({ product, onBack, onEdit, onCreateCampaign }) {
                         {currentProduct.images && currentProduct.images.length > 0 ? (
                             <div className="space-y-3">
                                 {currentProduct.images.map((image) => {
-                                    const activeImageUrl = dbOperations.getActiveImageUrl(currentProduct, image.id) || image.url;
+                                    const activeImageUrl = (dbOperations && dbOperations.getActiveImageUrl) ? 
+                                        dbOperations.getActiveImageUrl(currentProduct, image.id) || image.url : 
+                                        image.url;
                                     const hasCustomBackground = image.backgroundVersions?.some(v => v.isActive);
                                     
                                     return (
@@ -4821,7 +4434,7 @@ function LeftNav({ onNavigate }) {
                 
                 <div className="mt-8 space-y-1">
                     <h2 className="px-2 text-xs font-semibold text-[#0B2265] uppercase tracking-wider dark:text-gray-200">CREATE</h2>
-                                        <button
+                    <button
                         onClick={() => onNavigate(APP_VIEW_CAMPAIGN_BUILDER)}
                         className={`w-full flex items-center px-2 py-2 text-sm rounded-lg ${
                             currentView === APP_VIEW_CAMPAIGN_BUILDER
@@ -4830,7 +4443,7 @@ function LeftNav({ onNavigate }) {
                         }`}
                     >
                         <svg className="mr-3 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5V4a1 1 0 01-1-1z" clipRule="evenodd" />
                         </svg>
                         Campaign Builder
                     </button>
@@ -5015,18 +4628,382 @@ function LeftNav({ onNavigate }) {
  * The main application component that manages the state and renders different views.
  */
 function App() {
-    // Add state for app view
-    const [appView, setAppView] = useState(APP_VIEW_PRODUCT_MANAGER);
-    // State to manage the current view/step - Start with campaign creation
-    const [currentView, setCurrentView] = useState(VIEW_CREATE_CAMPAIGN); // Updated initial view
-    // State to hold the data for the ad being created (including customizations)
+    const [currentView, setCurrentView] = useState(VIEW_CREATE_CAMPAIGN);
     const [adData, setAdData] = useState(null);
-    // State to hold the selected campaign settings { campaign: { name }, audience: { type, locations, retailer } }
-    const [campaignSettings, setCampaignSettings] = useState(null); // Updated state name
+    const [campaignSettings, setCampaignSettings] = useState(null);
+    const [appView, setAppView] = useState(APP_VIEW_CAMPAIGN_BUILDER);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
-    // State for product management
     const [selectedProduct, setSelectedProduct] = useState(null);
-    
+
+    // Database Operations (using localStorage as temporary storage) - MEMOIZED to prevent re-creation
+    const dbOperations = useMemo(() => ({
+        saveAd: (adData) => {
+            try {
+                // Get existing campaigns
+                const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                
+                // Create a lightweight campaign entry without large image data
+                const lightweightAdData = {
+                    ...adData,
+                    // Store image reference instead of full base64 data
+                    imageSrc: adData.imageSrc ? '[Image Data - Not Stored]' : null,
+                    // Keep other important data but remove large image content
+                    originalImage: adData.originalImage ? '[Original Image - Not Stored]' : null
+                };
+                
+                // Create a new campaign entry
+                const newCampaign = {
+                    id: String(Date.now()), // Generate a unique ID
+                    productId: adData.productId || null, // NEW: Link to product
+                    name: adData.campaignName,
+                    status: 'Draft',
+                    info: true,
+                    created: new Date().toLocaleDateString(),
+                    type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
+                    budget: '$0.00', // Default budget
+                    starts: 'Not Set',
+                    ends: 'Not Set',
+                    adData: lightweightAdData // Store lightweight ad data without images
+                };
+
+                // Check storage space before saving
+                const testData = JSON.stringify([...existingCampaigns, newCampaign]);
+                if (testData.length > 4.5 * 1024 * 1024) { // 4.5MB limit to be safe
+                    // If too large, keep only the most recent 50 campaigns
+                    const recentCampaigns = existingCampaigns.slice(-49); // Keep 49, add 1 new = 50 total
+                    const finalCampaigns = [...recentCampaigns, newCampaign];
+                    localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
+                    console.warn('Storage limit reached. Keeping only 50 most recent campaigns.');
+                } else {
+                // Add to campaigns list
+                existingCampaigns.push(newCampaign);
+                localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+                }
+                
+                return { success: true, campaign: newCampaign };
+            } catch (error) {
+                console.error('Error saving campaign:', error);
+                
+                // If still failing due to quota, try emergency cleanup
+                if (error.name === 'QuotaExceededError') {
+                    try {
+                        // Keep only the 10 most recent campaigns and try again
+                        const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                        const recentCampaigns = existingCampaigns.slice(-9); // Keep 9, add 1 new = 10 total
+                        
+                        const lightweightAdData = {
+                            campaignName: adData.campaignName,
+                            productId: adData.productId,
+                            ctaType: adData.ctaType,
+                            adSize: adData.adSize,
+                            audience: adData.audience
+                        };
+                        
+                        const newCampaign = {
+                            id: String(Date.now()),
+                            productId: adData.productId || null,
+                            name: adData.campaignName,
+                            status: 'Draft',
+                            info: true,
+                            created: new Date().toLocaleDateString(),
+                            type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
+                            budget: '$0.00',
+                            starts: 'Not Set',
+                            ends: 'Not Set',
+                            adData: lightweightAdData
+                        };
+                        
+                        const finalCampaigns = [...recentCampaigns, newCampaign];
+                        localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
+                        
+                        console.warn('Emergency storage cleanup performed. Keeping only 10 most recent campaigns.');
+                        return { success: true, campaign: newCampaign };
+                    } catch (secondError) {
+                        console.error('Emergency save also failed:', secondError);
+                        return { success: false, error: 'Storage quota exceeded. Please clear browser data.' };
+                    }
+                }
+                
+                return { success: false, error: error.message };
+            }
+        },
+
+        getCampaigns: () => {
+            try {
+                return JSON.parse(localStorage.getItem('campaigns') || '[]');
+            } catch (error) {
+                console.error('Error getting campaigns:', error);
+                return [];
+            }
+        },
+
+        // Utility function to clear old campaigns if storage is getting full
+        clearOldCampaigns: () => {
+            try {
+                const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                // Keep only the 20 most recent campaigns
+                const recentCampaigns = campaigns.slice(-20);
+                localStorage.setItem('campaigns', JSON.stringify(recentCampaigns));
+                console.log(`Cleared ${campaigns.length - recentCampaigns.length} old campaigns`);
+                return { success: true, cleared: campaigns.length - recentCampaigns.length };
+            } catch (error) {
+                console.error('Error clearing campaigns:', error);
+                return { success: false, error: error.message };
+            }
+        },
+
+        // Get storage usage info
+        getStorageInfo: () => {
+            try {
+                const campaigns = JSON.stringify(localStorage.getItem('campaigns') || '[]');
+                const products = JSON.stringify(localStorage.getItem('products') || '[]');
+                const totalSize = campaigns.length + products.length;
+                const maxSize = 5 * 1024 * 1024; // 5MB typical limit
+                return {
+                    used: totalSize,
+                    max: maxSize,
+                    percentage: Math.round((totalSize / maxSize) * 100),
+                    campaigns: JSON.parse(localStorage.getItem('campaigns') || '[]').length,
+                    products: JSON.parse(localStorage.getItem('products') || '[]').length
+                };
+            } catch (error) {
+                return { used: 0, max: 5242880, percentage: 0, campaigns: 0, products: 0 };
+            }
+        },
+
+        // Product operations
+        saveProduct: (productData) => {
+            try {
+                const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+                const newProduct = {
+                    id: String(Date.now()),
+                    ...productData,
+                    created: new Date().toISOString(),
+                    updated: new Date().toISOString(),
+                    status: productData.status || 'Draft'
+                };
+                existingProducts.push(newProduct);
+                localStorage.setItem('products', JSON.stringify(existingProducts));
+                return { success: true, product: newProduct };
+            } catch (error) {
+                console.error('Error saving product:', error);
+                return { success: false, error: error.message };
+            }
+        },
+
+        getProducts: () => {
+            try {
+                return JSON.parse(localStorage.getItem('products') || '[]');
+            } catch (error) {
+                console.error('Error getting products:', error);
+                return [];
+            }
+        },
+
+        updateProduct: (productId, updates) => {
+            try {
+                const products = JSON.parse(localStorage.getItem('products') || '[]');
+                const productIndex = products.findIndex(p => p.id === productId);
+                if (productIndex !== -1) {
+                    products[productIndex] = {
+                        ...products[productIndex],
+                        ...updates,
+                        updated: new Date().toISOString()
+                    };
+                    localStorage.setItem('products', JSON.stringify(products));
+                    return { success: true, product: products[productIndex] };
+                }
+                return { success: false, error: 'Product not found' };
+            } catch (error) {
+                console.error('Error updating product:', error);
+                return { success: false, error: error.message };
+            }
+        },
+
+        deleteProduct: (productId) => {
+            try {
+                const products = JSON.parse(localStorage.getItem('products') || '[]');
+                const filteredProducts = products.filter(p => p.id !== productId);
+                localStorage.setItem('products', JSON.stringify(filteredProducts));
+                return { success: true };
+            } catch (error) {
+                console.error('Error deleting product:', error);
+                return { success: false, error: error.message };
+            }
+        },
+
+        // Background operations for Phase 2 features
+        storeBackground: (imageUrl, prompt) => {
+            try {
+                const backgrounds = JSON.parse(localStorage.getItem('backgrounds') || '[]');
+                const newBackground = {
+                    id: String(Date.now()),
+                    imageUrl,
+                    prompt,
+                    created: new Date().toISOString()
+                };
+                backgrounds.push(newBackground);
+                localStorage.setItem('backgrounds', JSON.stringify(backgrounds));
+                return { success: true, background: newBackground };
+            } catch (error) {
+                console.error('Error storing background:', error);
+                return { success: false, error: error.message };
+            }
+        },
+
+                 getBackgrounds: () => {
+             try {
+                 return JSON.parse(localStorage.getItem('backgrounds') || '[]');
+             } catch (error) {
+                 console.error('Error getting backgrounds:', error);
+                 return [];
+             }
+         },
+
+         // Background change operations for product management
+         addBackgroundVersion: (productId, imageId, backgroundData) => {
+             try {
+                 const products = JSON.parse(localStorage.getItem('products') || '[]');
+                 const productIndex = products.findIndex(p => p.id === productId);
+                 
+                 if (productIndex === -1) {
+                     return { success: false, error: 'Product not found' };
+                 }
+
+                 const product = products[productIndex];
+                 const imageIndex = product.images.findIndex(img => img.id === imageId);
+                 
+                 if (imageIndex === -1) {
+                     return { success: false, error: 'Image not found' };
+                 }
+
+                 // Initialize backgroundVersions if it doesn't exist
+                 if (!product.images[imageIndex].backgroundVersions) {
+                     product.images[imageIndex].backgroundVersions = [];
+                 }
+
+                 // Add new background version
+                 const backgroundVersion = {
+                     id: `bg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                     url: backgroundData.imageUrl,
+                     prompt: backgroundData.prompt,
+                     requestId: backgroundData.requestId,
+                     processingTime: backgroundData.processingTime,
+                     metadata: backgroundData.metadata,
+                     created: new Date().toISOString(),
+                     isActive: false // Will be set to true when selected
+                 };
+
+                 product.images[imageIndex].backgroundVersions.push(backgroundVersion);
+                 
+                 // Update product timestamp
+                 product.updated = new Date().toISOString();
+                 
+                 localStorage.setItem('products', JSON.stringify(products));
+                 
+                 return { success: true, backgroundVersion, product: product };
+             } catch (error) {
+                 console.error('Error adding background version:', error);
+                 return { success: false, error: error.message };
+             }
+         },
+
+         setActiveBackgroundVersion: (productId, imageId, backgroundVersionId) => {
+             try {
+                 const products = JSON.parse(localStorage.getItem('products') || '[]');
+                 const productIndex = products.findIndex(p => p.id === productId);
+                 
+                 if (productIndex === -1) {
+                     return { success: false, error: 'Product not found' };
+                 }
+
+                 const product = products[productIndex];
+                 const imageIndex = product.images.findIndex(img => img.id === imageId);
+                 
+                 if (imageIndex === -1) {
+                     return { success: false, error: 'Image not found' };
+                 }
+
+                 const backgroundVersions = product.images[imageIndex].backgroundVersions || [];
+                 
+                 // Set all versions to inactive
+                 backgroundVersions.forEach(version => {
+                     version.isActive = false;
+                 });
+
+                 // Set the selected version to active (null means original image)
+                 if (backgroundVersionId !== null) {
+                     const versionIndex = backgroundVersions.findIndex(v => v.id === backgroundVersionId);
+                     if (versionIndex === -1) {
+                         return { success: false, error: 'Background version not found' };
+                     }
+                     backgroundVersions[versionIndex].isActive = true;
+                 }
+
+                 // Update product timestamp
+                 product.updated = new Date().toISOString();
+                 
+                 localStorage.setItem('products', JSON.stringify(products));
+                 
+                 return { success: true, product: product };
+             } catch (error) {
+                 console.error('Error setting active background version:', error);
+                 return { success: false, error: error.message };
+             }
+         },
+
+         deleteBackgroundVersion: (productId, imageId, backgroundVersionId) => {
+             try {
+                 const products = JSON.parse(localStorage.getItem('products') || '[]');
+                 const productIndex = products.findIndex(p => p.id === productId);
+                 
+                 if (productIndex === -1) {
+                     return { success: false, error: 'Product not found' };
+                 }
+
+                 const product = products[productIndex];
+                 const imageIndex = product.images.findIndex(img => img.id === imageId);
+                 
+                 if (imageIndex === -1) {
+                     return { success: false, error: 'Image not found' };
+                 }
+
+                 if (!product.images[imageIndex].backgroundVersions) {
+                     return { success: false, error: 'No background versions found' };
+                 }
+
+                 // Remove the background version
+                 product.images[imageIndex].backgroundVersions = 
+                     product.images[imageIndex].backgroundVersions.filter(v => v.id !== backgroundVersionId);
+
+                 // Update product timestamp
+                 product.updated = new Date().toISOString();
+                 
+                 localStorage.setItem('products', JSON.stringify(products));
+                 
+                 return { success: true, product: product };
+             } catch (error) {
+                 console.error('Error deleting background version:', error);
+                 return { success: false, error: error.message };
+             }
+         },
+
+         getActiveImageUrl: (product, imageId) => {
+             try {
+                 const image = product.images.find(img => img.id === imageId);
+                 if (!image) return null;
+
+                 // Check if there's an active background version
+                 const activeBackgroundVersion = image.backgroundVersions?.find(v => v.isActive);
+                 
+                 return activeBackgroundVersion ? activeBackgroundVersion.url : image.url;
+             } catch (error) {
+                 console.error('Error getting active image URL:', error);
+                 return null;
+             }
+         }
+     }), []); // Empty dependency array - only create once
+
     // Browser history management for Campaign Builder
     const updateUrlFragment = (view) => {
         if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
@@ -5126,7 +5103,7 @@ function App() {
         setCurrentView(newView);
         updateUrlFragment(newView);
     };
-
+    
     // Initialize dark mode based on saved preference or system preference
     useEffect(() => {
         const savedTheme = localStorage.getItem('darkMode');
@@ -5311,6 +5288,7 @@ function App() {
                     onCampaignCreated={handleCampaignCreated}
                     onSaveAndExit={handleSaveAndExit}
                     selectedProduct={selectedProduct}
+                    dbOperations={dbOperations}
                 />;
             case VIEW_START:
                 return <StartScreen
@@ -5341,12 +5319,16 @@ function App() {
                             adData={adData}
                             campaignSettings={campaignSettings} // Pass campaign settings object
                             onPublish={handleGoToPublish}
+                            dbOperations={dbOperations}
                         />;
             case VIEW_PUBLISH:
                 // Pass the fully customized adData and the back handler
                 return <PublishScreen adData={adData} onBack={handleBackToCustomize} />;
             default: // Default to the new starting view
-                return <CreateCampaignScreen onCampaignCreated={handleCampaignCreated} />;
+                return <CreateCampaignScreen 
+                    onCampaignCreated={handleCampaignCreated} 
+                    dbOperations={dbOperations}
+                />;
         }
     };
 
@@ -5394,6 +5376,7 @@ function App() {
                                 onCreateNew={handleCreateNewProduct}
                                 onProductClick={handleProductClick}
                                 onEditProduct={handleEditProduct}
+                                dbOperations={dbOperations}
                             />
                         ) : appView === APP_VIEW_PRODUCT_DETAILS ? (
                             <ProductDetailsView 
@@ -5401,6 +5384,7 @@ function App() {
                                 onBack={() => setAppView(APP_VIEW_PRODUCT_MANAGER)}
                                 onEdit={handleEditProduct}
                                 onCreateCampaign={handleCreateCampaignFromProduct}
+                                dbOperations={dbOperations}
                             />
                         ) : appView === APP_VIEW_PRODUCT_FORM ? (
                             <ProductFormView 
@@ -5412,12 +5396,14 @@ function App() {
                             <CampaignManagerView 
                                 onCreateNew={handleCreateNewCampaign}
                                 onCampaignClick={handleCampaignClick}
+                                dbOperations={dbOperations}
                             />
                         ) : appView === APP_VIEW_CAMPAIGN_DETAILS ? (
                             <CampaignDetailsView 
                                 campaign={selectedCampaign}
                                 onBack={handleBackToCampaigns}
                                 onPreviewCreative={handlePreviewCreative}
+                                dbOperations={dbOperations}
                             />
                         ) : appView === APP_VIEW_AD_PLATFORMS ? (
                             <AdPlatformsView />
@@ -5434,7 +5420,7 @@ function App() {
                         ) : appView === APP_VIEW_LOCATORS ? (
                             <LocatorsView />
                         ) : appView === APP_VIEW_ACCOUNT ? (
-                            <AccountView />
+                            <AccountView dbOperations={dbOperations} />
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (
