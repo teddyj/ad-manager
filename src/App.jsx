@@ -407,6 +407,136 @@ function SelectDropdown({ id, label, value, onChange, options, disabled = false,
  * Renders the ad preview based on selected size and data.
  * Includes click-to-expand interaction for Where-to-Buy overlay.
  */
+// Canvas Preview Component - Shows the edited canvas as a static preview
+function CanvasPreview({ canvasData, adSize }) {
+    if (!canvasData || !canvasData.elements) {
+        return <div className="text-red-500">No canvas data available</div>;
+    }
+
+    // Parse ad size for dimensions
+    const parseSize = (sizeString) => {
+        const [width, height] = sizeString.split('x').map(Number);
+        return { width, height };
+    };
+
+    const { width, height } = parseSize(adSize);
+    const elements = canvasData.elements || [];
+
+    // Scale for preview display
+    const maxPreviewWidth = 300;
+    const scale = Math.min(maxPreviewWidth / width, 1);
+    const previewWidth = width * scale;
+    const previewHeight = height * scale;
+
+    console.log('🎨 Rendering canvas preview:', {
+        adSize,
+        dimensions: { width, height },
+        scale,
+        elementsCount: elements.length,
+        backgroundImage: canvasData.meta?.backgroundImage
+    });
+
+    return (
+        <div className="flex justify-center">
+            <div 
+                className="relative border border-gray-300 bg-white shadow-lg"
+                style={{
+                    width: `${width}px`,
+                    height: `${height}px`,
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'center center'
+                }}
+            >
+            {/* Background */}
+            {canvasData.meta?.backgroundImage && (
+                <div
+                    className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                    style={{
+                        backgroundImage: `url(${canvasData.meta.backgroundImage})`
+                    }}
+                />
+            )}
+
+            {/* Render all elements */}
+            {elements
+                .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+                .map((element, index) => {
+                    const elementStyle = {
+                        position: 'absolute',
+                        left: `${element.position?.x || 0}px`,
+                        top: `${element.position?.y || 0}px`,
+                        width: `${element.size?.width || 100}px`,
+                        height: `${element.size?.height || 50}px`,
+                        zIndex: element.zIndex || 0,
+                        ...element.styles
+                    };
+
+                    if (element.type === 'text') {
+                        return (
+                            <div
+                                key={element.id || `text-${index}`}
+                                style={elementStyle}
+                                className="flex items-center justify-center text-center pointer-events-none"
+                            >
+                                {String(element.content || '')}
+                            </div>
+                        );
+                    }
+
+                    if (element.type === 'button') {
+                        return (
+                            <div
+                                key={element.id || `button-${index}`}
+                                style={elementStyle}
+                                className="flex items-center justify-center bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 transition-colors pointer-events-none"
+                            >
+                                {String(element.content || 'Button')}
+                            </div>
+                        );
+                    }
+
+                    if (element.type === 'image' || element.type === 'product') {
+                        const imgSrc = element.content || element.src;
+                        return (
+                            <div
+                                key={element.id || `image-${index}`}
+                                style={elementStyle}
+                                className="overflow-hidden pointer-events-none"
+                            >
+                                {imgSrc ? (
+                                    <img
+                                        src={imgSrc}
+                                        alt="Element"
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">
+                                        Image
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
+
+                    // Default element rendering
+                    return (
+                        <div
+                            key={element.id || `element-${index}`}
+                            style={elementStyle}
+                            className="bg-gray-200 border border-gray-300 flex items-center justify-center text-xs text-gray-600 pointer-events-none"
+                        >
+                            {String(element.type || 'Element')}
+                        </div>
+                                         );
+                 })}
+            </div>
+        </div>
+    );
+}
+
 function AdPreviewContent({
     headline,
     description,
@@ -2527,13 +2657,15 @@ function AdCustomization({ adData, campaignSettings, onPublish, dbOperations }) 
  * PublishScreen Component
  * Step 5: Review and Publish Your Ad. Includes selected campaign/audience info.
  */
-function PublishScreen({ adData, onBack }) {
+function PublishScreen({ adData, onBack, dbOperations }) {
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState(null);
     const [navigateToAdPlatforms, setNavigateToAdPlatforms] = useState(false);
 
-    // For navigating to Ad Platforms
+    // For navigating to Ad Platforms and Campaign Manager
     const { setAppView } = useContext(AppContext);
+    const APP_VIEW_CAMPAIGN_MANAGER = 'campaign_manager';
+    const APP_VIEW_AD_PLATFORMS = 'ad_platforms';
 
     useEffect(() => {
         if (navigateToAdPlatforms) {
@@ -2600,6 +2732,52 @@ function PublishScreen({ adData, onBack }) {
         }
     };
 
+    // Handle save campaign and return to campaign manager
+    const handleSaveCampaign = async () => {
+        setIsSaving(true);
+        setSaveStatus(null);
+
+        try {
+            const result = await Promise.resolve(dbOperations.saveAd(adData));
+            
+            if (result.success) {
+                setSaveStatus({
+                    type: 'success',
+                    message: 'Campaign saved successfully! Returning to Campaign Manager...'
+                });
+                
+                // Navigate to Campaign Manager after a brief delay
+                setTimeout(() => {
+                    setAppView(APP_VIEW_CAMPAIGN_MANAGER);
+                }, 1500);
+            } else {
+                let errorMessage = 'Failed to save campaign. Please try again.';
+                
+                if (result.error && result.error.includes('quota')) {
+                    const storageInfo = dbOperations.getStorageInfo();
+                    errorMessage = `Storage limit reached! You have ${storageInfo.campaigns} campaigns stored. The campaign was saved but older campaigns were cleaned up.`;
+                } else if (result.error && result.error.includes('Storage')) {
+                    errorMessage = 'Storage quota exceeded. Please clear some browser data and try again.';
+                } else if (result.error) {
+                    errorMessage = `Save failed: ${result.error}`;
+                }
+                
+                setSaveStatus({
+                    type: result.error && result.error.includes('quota') ? 'warning' : 'error',
+                    message: errorMessage
+                });
+            }
+        } catch (error) {
+            console.error('Error in handleSaveCampaign:', error);
+            setSaveStatus({
+                type: 'error',
+                message: 'An unexpected error occurred while saving. Please try again.'
+            });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     // Extract data for display with fallbacks
     const {
         headline = "Ad Headline",
@@ -2614,11 +2792,34 @@ function PublishScreen({ adData, onBack }) {
         imageUrl: fetchedImageUrl,
         utmData = null,
         product = null,
-        productId = null
+        productId = null,
+        elements = [], // Canvas elements from editing
+        canvasData = null // Full canvas state
     } = adData;
 
-    // Determine the primary image source for display
-    const imageSrc = uploadedDataUrl || fetchedImageUrl;
+    console.log('📋 PublishScreen received adData:', {
+        headline,
+        description,
+        ctaText,
+        hasElements: elements.length > 0,
+        hasCanvasData: !!canvasData,
+        imageSources: { uploadedDataUrl, fetchedImageUrl }
+    });
+
+    // Determine the primary image source for display, preferring edited canvas data
+    let imageSrc = uploadedDataUrl || fetchedImageUrl;
+    
+    // If we have canvas elements, try to extract the image from the edited elements
+    if (elements && elements.length > 0) {
+        const imageElement = elements.find(el => 
+            (el.type === 'image' || el.type === 'product') && 
+            (el.content || el.src)
+        );
+        if (imageElement) {
+            imageSrc = imageElement.content || imageElement.src || imageSrc;
+            console.log('🖼️ Using image from canvas element:', imageSrc);
+        }
+    }
 
     // Find labels/values for display
     const audienceTypeLabel = AUDIENCE_OPTIONS.find(opt => opt.value === audience?.type)?.label || audience?.type || 'N/A';
@@ -2626,26 +2827,45 @@ function PublishScreen({ adData, onBack }) {
     const retailerLabel = RETAILER_OPTIONS.find(opt => opt.value === audience?.retailer)?.label || audience?.retailer || 'N/A';
 
     return (
-        <Card title="Step 5: Review and Publish Your Ad" className="max-w-2xl mx-auto">
+        <Card title="Step 3: Review and Save Your Campaign" className="max-w-2xl mx-auto">
             {/* Display selected campaign & audience details */}
-            <div className="text-center text-sm text-gray-600 mb-4 border-b pb-2">
-                <p>Campaign: <span className="font-semibold">{campaignName}</span></p>
-                <p>Target Segment: <span className="font-semibold">{audienceTypeLabel}</span></p>
-                <p>Location(s): <span className="font-semibold">{audienceLocationsDisplay}</span></p>
-                <p>Retailer: <span className="font-semibold">{retailerLabel}</span></p>
-            </div>
+                <div className="text-center text-sm text-gray-600 mb-4 border-b pb-2">
+                    <p>Campaign: <span className="font-semibold">{campaignName}</span></p>
+                    <p>Target Segment: <span className="font-semibold">{audienceTypeLabel}</span></p>
+                    <p>Location(s): <span className="font-semibold">{audienceLocationsDisplay}</span></p>
+                    <p>Retailer: <span className="font-semibold">{retailerLabel}</span></p>
+                </div>
 
             {/* Final Ad Preview Container */}
             <div className="mb-6 flex justify-center">
-                <AdPreviewContent
-                    headline={headline}
-                    description={description}
-                    imageSrc={imageSrc}
-                    ctaType={ctaType}
-                    ctaText={ctaText}
-                    clickUrl={clickUrl}
-                    adSize={adSize}
-                />
+                {canvasData && elements && elements.length > 0 ? (
+                    // Show edited canvas version
+                    <div>
+                        <p className="text-xs text-green-600 text-center mb-2">
+                            ✓ Showing your edited ad ({elements.length} elements)
+                        </p>
+                        <CanvasPreview 
+                            canvasData={canvasData}
+                            adSize={adSize}
+                        />
+                    </div>
+                ) : (
+                    // Fallback to original simple preview
+                    <div>
+                        <p className="text-xs text-orange-600 text-center mb-2">
+                            ⚠ Showing simple preview (no edits made)
+                        </p>
+                        <AdPreviewContent
+                            headline={headline}
+                            description={description}
+                            imageSrc={imageSrc}
+                            ctaType={ctaType}
+                            ctaText={ctaText}
+                            clickUrl={clickUrl}
+                            adSize={adSize}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Display Click URL if Text CTA was used */}
@@ -2749,42 +2969,58 @@ function PublishScreen({ adData, onBack }) {
                 </div>
             )}
 
-            <div className="space-y-3 mb-6">
-                {/* Save Button */}
-                <Button 
-                    variant="primary" 
-                    className="w-full" 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                >
-                    {isSaving ? 'Saving...' : 'Save Campaign'}
-                </Button>
+                {/* Status Message */}
+                {saveStatus && (
+                    <div className={`p-3 rounded-lg mb-4 ${
+                        saveStatus.type === 'success' ? 'bg-green-50 text-green-800' :
+                        saveStatus.type === 'warning' ? 'bg-yellow-50 text-yellow-800' :
+                        'bg-red-50 text-red-800'
+                    }`}>
+                        {saveStatus.message}
+                    </div>
+                )}
 
-                <Button 
-                    variant="primary" 
-                    className="w-full" 
-                    onClick={() => handlePublishToAdPlatform('Google Ads')}
-                    disabled={isSaving}
-                >
-                    Publish to Google Ads
-                </Button>
-                
-                <Button 
-                    variant="primary" 
-                    className="w-full" 
-                    onClick={() => handlePublishToAdPlatform('Facebook Ads')}
-                    disabled={isSaving}
-                >
-                    Publish to Facebook Ads
-                </Button>
-                
-                <Button variant="secondary" className="w-full" disabled>Download Ad Files</Button>
-            </div>
+                <div className="space-y-3 mb-6">
+                    {/* Primary Save Campaign Button */}
+                    <Button 
+                        variant="primary" 
+                        className="w-full bg-[#F7941D] hover:bg-orange-600" 
+                        onClick={handleSaveCampaign}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? 'Saving Campaign...' : '💾 Save Campaign'}
+                    </Button>
 
-            {/* Back Button */}
-            <div className="text-center">
-                <Button onClick={onBack} variant="secondary">Back to Editing</Button>
-            </div>
+                    {/* Platform Publishing Options */}
+                    <div className="pt-4 border-t border-gray-200">
+                        <p className="text-sm text-gray-600 mb-3 text-center">Or publish directly to platforms:</p>
+                        
+                        <Button 
+                            variant="primary" 
+                            className="w-full mb-3" 
+                            onClick={() => handlePublishToAdPlatform('Google Ads')}
+                            disabled={isSaving}
+                        >
+                            Publish to Google Ads
+                        </Button>
+                        
+                        <Button 
+                            variant="primary" 
+                            className="w-full mb-3" 
+                            onClick={() => handlePublishToAdPlatform('Facebook Ads')}
+                            disabled={isSaving}
+                        >
+                            Publish to Facebook Ads
+                        </Button>
+                        
+                        <Button variant="secondary" className="w-full" disabled>Download Ad Files</Button>
+                    </div>
+                </div>
+
+                {/* Back Button */}
+                <div className="text-center">
+                    <Button onClick={onBack} variant="secondary">Back to Editing</Button>
+                </div>
         </Card>
     );
 }
@@ -5169,7 +5405,13 @@ function App() {
     // Stores the fully customized data before going to publish
     const handleGoToPublish = (customizedData) => {
         // Campaign/Audience info should already be in customizedData from AdCustomization step
-        console.log("Final Data for Publish:", customizedData);
+        console.log("🚀 Final Data for Publish:", customizedData);
+        console.log('📊 Canvas data included:', {
+            hasCanvasData: !!customizedData.canvasData,
+            hasElements: customizedData.elements?.length > 0,
+            elementsCount: customizedData.elements?.length || 0,
+            elementsTypes: customizedData.elements?.map(el => el.type) || []
+        });
         setAdData(customizedData); // Update adData with customizations
         setCurrentViewWithHistory(VIEW_PUBLISH);
     }
@@ -5323,7 +5565,7 @@ function App() {
                         />;
             case VIEW_PUBLISH:
                 // Pass the fully customized adData and the back handler
-                return <PublishScreen adData={adData} onBack={handleBackToCustomize} />;
+                return <PublishScreen adData={adData} onBack={handleBackToCustomize} dbOperations={dbOperations} />;
             default: // Default to the new starting view
                 return <CreateCampaignScreen 
                     onCampaignCreated={handleCampaignCreated} 

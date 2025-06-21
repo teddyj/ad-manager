@@ -1,24 +1,38 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import CanvasWorkspace from './CanvasWorkspace.jsx';
 import ElementRenderer from './ElementRenderer.jsx';
+import ElementControls from './ElementControls.jsx';
+import SnapGuides from './SnapGuides.jsx';
 import DesignControls from '../design/DesignControls.jsx';
 import DesignToolbar from '../design/DesignToolbar.jsx';
+import { TEXT_STYLES, createDefaultTextElement } from '../../constants/textStyles.js';
 
 /**
  * CanvasEditor - Main canvas-based creative builder component
- * Replaces the old AdCustomization interface with a modern design canvas
+ * Enhanced for Phase 7 with responsive design support
  */
 function CanvasEditor({ 
   adData, 
   campaignSettings, 
   onPublish,
-  initialAdSize = '300x250'
+  initialAdSize = '300x250',
+  dbOperations, // Add dbOperations for background customization
+  // Phase 7: Responsive mode props
+  isResponsiveMode = false,
+  currentFormat = null,
+  canvasState: providedCanvasState = null,
+  onCanvasStateChange = null,
+  readonly = false,
+  viewportScale = 1,
+  showScaleControls = false,
+  onScaleChange = null,
+  onFitToScreen = null
 }) {
-  // Canvas state management
-  const [canvasState, setCanvasState] = useState(() => ({
+  // Canvas state initialization function
+  const getInitialCanvasState = useCallback(() => ({
     meta: {
       adSize: initialAdSize,
-      backgroundImage: adData?.url || adData?.imageUrl || null,
+      backgroundImage: null, // Don't use product image as background
       template: 'product-focused'
     },
     elements: [
@@ -31,11 +45,11 @@ function CanvasEditor({
         size: { width: 260, height: 40 },
         zIndex: 2,
         styles: {
-          fontSize: '18px',
-          fontWeight: 'bold',
-          color: '#1a1a1a',
-          textAlign: 'center',
-          fontFamily: 'Inter, sans-serif'
+          ...TEXT_STYLES.HEADLINE_SECONDARY,
+          // Remove non-CSS properties for styling
+          id: undefined,
+          name: undefined,
+          category: undefined
         },
         interactive: true,
         locked: false
@@ -48,11 +62,12 @@ function CanvasEditor({
         size: { width: 260, height: 30 },
         zIndex: 2,
         styles: {
-          fontSize: '14px',
-          fontWeight: 'normal',
-          color: '#666666',
-          textAlign: 'center',
-          fontFamily: 'Inter, sans-serif'
+          ...TEXT_STYLES.BODY_TEXT,
+          textAlign: 'center', // Override alignment for this specific element
+          // Remove non-CSS properties for styling
+          id: undefined,
+          name: undefined,
+          category: undefined
         },
         interactive: true,
         locked: false
@@ -80,10 +95,37 @@ function CanvasEditor({
       past: [],
       future: []
     }
-  }));
+  }), [initialAdSize, adData]);
+
+  // Active canvas state management - Fixed for proper callback handling
+  const [internalCanvasState, setInternalCanvasState] = useState(providedCanvasState || getInitialCanvasState());
+  const activeCanvasState = providedCanvasState || internalCanvasState;
+  
+  // Fixed setActiveCanvasState to handle both function updaters and direct values
+  const setActiveCanvasState = useCallback((newStateOrUpdater) => {
+    if (onCanvasStateChange) {
+      // When we have an external callback, we need to resolve the updater function first
+      if (typeof newStateOrUpdater === 'function') {
+        const newState = newStateOrUpdater(activeCanvasState);
+        console.log('🔧 Calling onCanvasStateChange with resolved state:', newState);
+        onCanvasStateChange(newState);
+      } else {
+        console.log('🔧 Calling onCanvasStateChange with direct state:', newStateOrUpdater);
+        onCanvasStateChange(newStateOrUpdater);
+      }
+    } else {
+      // For internal state, we can use the updater function directly
+      console.log('🔧 Using internal state setter');
+      setInternalCanvasState(newStateOrUpdater);
+    }
+  }, [onCanvasStateChange, activeCanvasState]);
 
   // Selected element state
   const [selectedElementId, setSelectedElementId] = useState(null);
+  const [selectedElementIds, setSelectedElementIds] = useState([]);
+  const [snapGuides, setSnapGuides] = useState([]);
+  const [showSnapGuides, setShowSnapGuides] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
   
   // Canvas dimensions based on ad size
   const getCanvasDimensions = useCallback((adSize) => {
@@ -91,23 +133,108 @@ function CanvasEditor({
     return { width, height };
   }, []);
 
-  const canvasDimensions = getCanvasDimensions(canvasState.meta.adSize);
+  const canvasDimensions = getCanvasDimensions(activeCanvasState?.meta?.adSize || initialAdSize);
 
   // Element manipulation handlers
   const handleElementUpdate = useCallback((elementId, updates) => {
-    setCanvasState(prev => ({
-      ...prev,
-      elements: prev.elements.map(el => 
-        el.id === elementId ? { ...el, ...updates } : el
-      )
-    }));
-  }, []);
+    if (readonly) return;
+    
+    console.log('🔄 handleElementUpdate called:', {
+      elementId: elementId,
+      updatesKeys: Object.keys(updates),
+      positionUpdate: updates.position ? JSON.stringify(updates.position) : 'NO_POSITION_UPDATE',
+      currentElementsCount: activeCanvasState?.elements?.length
+    });
+    
+    setActiveCanvasState(prev => {
+      const oldElements = prev?.elements || [];
+             const newElements = oldElements.map(el => {
+         if (el.id === elementId) {
+           // Deep merge to preserve all properties
+           const updatedElement = {
+             ...el,
+             ...updates,
+             // Ensure position and size are properly merged if they exist
+             position: updates.position ? { ...el.position, ...updates.position } : el.position,
+             size: updates.size ? { ...el.size, ...updates.size } : el.size,
+             styles: updates.styles ? { ...el.styles, ...updates.styles } : el.styles
+           };
+           
+           console.log('🔄 Element being updated:', {
+             id: el.id,
+             type: el.type,
+             oldPosition: JSON.stringify(el.position),
+             newPosition: JSON.stringify(updatedElement.position),
+             oldContent: el.content ? 'HAS_CONTENT' : 'NO_CONTENT',
+             newContent: updatedElement.content ? 'HAS_CONTENT' : 'NO_CONTENT',
+             hasValidPosition: !!(updatedElement.position?.x !== undefined && updatedElement.position?.y !== undefined),
+             hasValidSize: !!(updatedElement.size?.width !== undefined && updatedElement.size?.height !== undefined)
+           });
+           
+           // Validate the updated element before returning
+           if (!updatedElement.position || typeof updatedElement.position.x !== 'number' || typeof updatedElement.position.y !== 'number') {
+             console.error('❌ Invalid position after update, keeping original:', updatedElement.position);
+             return el; // Return original element if update would break it
+           }
+           
+           if (!updatedElement.size || typeof updatedElement.size.width !== 'number' || typeof updatedElement.size.height !== 'number') {
+             console.error('❌ Invalid size after update, keeping original:', updatedElement.size);
+             return el; // Return original element if update would break it
+           }
+           
+           return updatedElement;
+         }
+         return el;
+       });
+      
+      console.log('🔄 Elements after update:', {
+        oldCount: oldElements.length,
+        newCount: newElements.length,
+        updatedElementExists: newElements.some(el => el.id === elementId)
+      });
+      
+      return {
+        ...prev,
+        elements: newElements
+      };
+    });
+  }, [setActiveCanvasState, readonly, activeCanvasState?.elements?.length]);
 
   const handleElementSelect = useCallback((elementId) => {
+    if (readonly) return;
+    // Prevent unnecessary re-selections
+    if (selectedElementId === elementId) return;
     setSelectedElementId(elementId);
-  }, []);
+  }, [readonly, selectedElementId]);
 
-  const handleElementAdd = useCallback((elementType, position = { x: 50, y: 50 }) => {
+  const handleElementAdd = useCallback((elementType, position = { x: 50, y: 50 }, textStyle = null, customElement = null) => {
+    if (readonly) return;
+    
+    const elements = activeCanvasState?.elements || [];
+    
+    // If a complete custom element is provided, use it directly
+    if (customElement && customElement.id && customElement.type) {
+      const elementWithZIndex = {
+        ...customElement,
+        zIndex: Math.max(...elements.map(el => el.zIndex), 0) + 1
+      };
+
+      // Remove the special flag before adding to canvas
+      const { _preventAutoSelect, ...cleanElement } = elementWithZIndex;
+      setActiveCanvasState(prev => ({
+        ...prev,
+        elements: [...(prev?.elements || []), cleanElement]
+      }));
+      
+      // Only auto-select if not prevented
+      if (!_preventAutoSelect) {
+        setSelectedElementId(cleanElement.id);
+      }
+      
+      return;
+    }
+
+    // Default element creation for standard types
     const newElement = {
       id: `${elementType}-${Date.now()}`,
       type: elementType,
@@ -117,29 +244,37 @@ function CanvasEditor({
       size: elementType === 'text' ? { width: 150, height: 30 } :
             elementType === 'button' ? { width: 100, height: 40 } :
             { width: 100, height: 100 },
-      zIndex: Math.max(...canvasState.elements.map(el => el.zIndex), 0) + 1,
-      styles: getDefaultStyles(elementType),
+      zIndex: Math.max(...elements.map(el => el.zIndex), 0) + 1,
+      styles: textStyle ? {
+        ...textStyle,
+        // Remove non-CSS properties for styling
+        id: undefined,
+        name: undefined,
+        category: undefined
+      } : getDefaultStyles(elementType),
       interactive: true,
-      locked: false
+      locked: false,
+      // Add shape-specific properties
+      ...(elementType === 'shape' && { shapeType: position || 'rectangle' }) // position parameter used for shapeType when creating shapes
     };
 
-    setCanvasState(prev => ({
+    setActiveCanvasState(prev => ({
       ...prev,
-      elements: [...prev.elements, newElement]
+      elements: [...(prev?.elements || []), newElement]
     }));
 
     setSelectedElementId(newElement.id);
-  }, [canvasState.elements]);
+  }, [activeCanvasState?.elements, setActiveCanvasState, readonly]);
 
   const getDefaultStyles = (elementType) => {
     switch (elementType) {
       case 'text':
         return {
-          fontSize: '16px',
-          fontWeight: 'normal',
-          color: '#333333',
-          textAlign: 'left',
-          fontFamily: 'Inter, sans-serif'
+          ...TEXT_STYLES.BODY_TEXT,
+          // Remove non-CSS properties for styling
+          id: undefined,
+          name: undefined,
+          category: undefined
         };
       case 'button':
         return {
@@ -150,82 +285,359 @@ function CanvasEditor({
           fontWeight: 'bold',
           fontSize: '14px'
         };
+      case 'shape':
+        return {
+          backgroundColor: '#3b82f6',
+          border: 'none',
+          borderRadius: '0px'
+        };
       default:
         return {};
     }
   };
 
   const handleAdSizeChange = useCallback((newAdSize) => {
-    setCanvasState(prev => ({
+    if (readonly) return;
+    
+    setActiveCanvasState(prev => ({
       ...prev,
       meta: { ...prev.meta, adSize: newAdSize }
     }));
-  }, []);
+  }, [setActiveCanvasState, readonly]);
 
   const handleBackgroundChange = useCallback((backgroundImage) => {
-    setCanvasState(prev => ({
-      ...prev,
-      meta: { ...prev.meta, backgroundImage }
-    }));
-  }, []);
+    console.log('🎨 handleBackgroundChange called with:', backgroundImage);
+    console.log('🔍 setActiveCanvasState is:', setActiveCanvasState);
+    console.log('🔍 setActiveCanvasState type:', typeof setActiveCanvasState);
+    if (readonly) return;
+    
+    console.log('🔧 Setting canvas state with backgroundImage:', backgroundImage);
+    setActiveCanvasState(prev => {
+      console.log('📥 Previous canvas state:', prev);
+      
+      // Ensure we have a valid previous state
+      if (!prev || typeof prev !== 'object') {
+        console.error('❌ Previous canvas state is invalid:', prev);
+        return prev; // Don't update if prev state is invalid
+      }
+      
+      const newState = {
+        ...prev,
+        meta: { 
+          ...prev.meta, 
+          backgroundImage 
+        }
+      };
+      console.log('📊 New canvas state will be:', newState);
+      return newState;
+    });
+  }, [setActiveCanvasState, readonly]);
 
   const handlePublish = useCallback(() => {
     // Convert canvas state back to the format expected by the publish screen
+    const elements = activeCanvasState?.elements || [];
+    
+    // Find text elements more comprehensively
+    const textElements = elements.filter(el => el.type === 'text');
+    const buttonElements = elements.filter(el => el.type === 'button');
+    const imageElements = elements.filter(el => el.type === 'image' || el.type === 'product');
+    
+    // Extract headline (first large text or text with "headline" in ID/content)
+    const headlineElement = textElements.find(el => 
+      el.id?.includes('headline') || 
+      el.content?.toLowerCase().includes('headline') ||
+      (el.styles?.fontSize && parseInt(el.styles.fontSize) > 20)
+    ) || textElements[0];
+    
+    // Extract description (remaining text elements)
+    const descriptionElement = textElements.find(el => 
+      el.id?.includes('description') || 
+      el.id?.includes('desc') ||
+      (el !== headlineElement && el.content?.length > 20)
+    ) || textElements[1];
+    
+    // Extract CTA from button
+    const ctaElement = buttonElements[0];
+    
+    // Get primary image
+    const primaryImage = imageElements[0];
+    
+    console.log('🔄 Capturing edited canvas state:', {
+      elements: elements.length,
+      textElements: textElements.length,
+      buttonElements: buttonElements.length,
+      imageElements: imageElements.length,
+      headline: headlineElement?.content,
+      description: descriptionElement?.content,
+      cta: ctaElement?.content
+    });
+    
     const customizedAdData = {
       ...adData,
-      headline: canvasState.elements.find(el => el.id === 'headline-1')?.content || '',
-      description: canvasState.elements.find(el => el.id === 'description-1')?.content || '',
-      ctaText: canvasState.elements.find(el => el.type === 'button')?.content || 'Shop Now',
-      adSize: canvasState.meta.adSize,
-      backgroundImage: canvasState.meta.backgroundImage,
-      canvasData: canvasState, // Include full canvas state for future editing
+      // Capture edited text content
+      headline: headlineElement?.content || adData.headline || '',
+      description: descriptionElement?.content || adData.description || '',
+      ctaText: ctaElement?.content || adData.ctaText || 'Shop Now',
+      
+      // Capture canvas settings
+      adSize: activeCanvasState?.meta?.adSize || initialAdSize,
+      backgroundImage: activeCanvasState?.meta?.backgroundImage || adData.backgroundImage,
+      
+      // Capture image updates
+      imageUrl: primaryImage?.content || primaryImage?.src || adData.imageUrl || adData.url,
+      url: primaryImage?.content || primaryImage?.src || adData.url || adData.imageUrl,
+      
+      // Include full canvas state for complete editing context
+      canvasData: activeCanvasState,
+      elements: elements, // Include all elements for rendering
+      
+      // Preserve campaign info
       campaignName: campaignSettings?.campaign?.name || 'Unnamed Campaign',
-      audience: campaignSettings?.audience || {}
+      audience: campaignSettings?.audience || {},
+      
+      // Preserve other original data
+      clickUrl: adData.clickUrl,
+      ctaType: adData.ctaType,
+      product: adData.product,
+      productId: adData.productId,
+      utmData: adData.utmData
     };
-
+    
+    console.log('🚀 Publishing customized ad data:', customizedAdData);
     onPublish(customizedAdData);
-  }, [canvasState, adData, campaignSettings, onPublish]);
+  }, [activeCanvasState, adData, campaignSettings, onPublish, initialAdSize]);
 
-  const selectedElement = canvasState.elements.find(el => el.id === selectedElementId);
+  // Phase 5: Advanced Controls & Interactions handlers
+  const handleElementDelete = useCallback((elementId) => {
+    if (readonly) return;
+    
+    setActiveCanvasState(prev => ({
+      ...prev,
+      elements: (prev?.elements || []).filter(el => el.id !== elementId)
+    }));
+    
+    if (selectedElementId === elementId) {
+      setSelectedElementId(null);
+    }
+    
+    setSelectedElementIds(prev => prev.filter(id => id !== elementId));
+  }, [selectedElementId, setActiveCanvasState, readonly]);
+
+  const handleElementDuplicate = useCallback((elementId) => {
+    if (readonly) return;
+    
+    const elements = activeCanvasState?.elements || [];
+    const element = elements.find(el => el.id === elementId);
+    if (element) {
+      const duplicatedElement = {
+        ...element,
+        id: `${element.type}-${Date.now()}`,
+        position: {
+          x: element.position.x + 20,
+          y: element.position.y + 20
+        },
+        zIndex: Math.max(...elements.map(el => el.zIndex), 0) + 1
+      };
+
+      setActiveCanvasState(prev => ({
+        ...prev,
+        elements: [...(prev?.elements || []), duplicatedElement]
+      }));
+
+      setSelectedElementId(duplicatedElement.id);
+    }
+  }, [activeCanvasState?.elements, setActiveCanvasState, readonly]);
+
+  const handleElementLock = useCallback((elementId, locked) => {
+    handleElementUpdate(elementId, { locked });
+  }, [handleElementUpdate]);
+
+  const handleElementGroup = useCallback((elementIds) => {
+    if (readonly || elementIds.length < 2) return;
+
+    // Implementation would create a group element
+    console.log('Grouping elements:', elementIds);
+  }, [readonly]);
+
+  const handleElementUngroup = useCallback((groupId) => {
+    if (readonly) return;
+    
+    // Implementation would ungroup elements
+    console.log('Ungrouping element:', groupId);
+  }, [readonly]);
+
+  const handleLayerReorder = useCallback((elementId, newZIndex) => {
+    handleElementUpdate(elementId, { zIndex: newZIndex });
+  }, [handleElementUpdate]);
+
+  const handleMultiElementUpdate = useCallback((updates) => {
+    if (readonly) return;
+    
+    setActiveCanvasState(prev => ({
+      ...prev,
+      elements: (prev?.elements || []).map(el => 
+        updates[el.id] ? { ...el, ...updates[el.id] } : el
+      )
+    }));
+  }, [setActiveCanvasState, readonly]);
+
+  const handleSnapGuideCreate = useCallback((guides) => {
+    setSnapGuides(guides);
+  }, []);
+
+  const selectedElement = activeCanvasState?.elements?.find(el => el.id === selectedElementId);
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Design Toolbar */}
+      {/* Design Toolbar - Enhanced for Phase 7 */}
       <div className="w-full fixed top-0 z-40 bg-white border-b border-gray-200">
         <DesignToolbar 
-          canvasState={canvasState}
+          canvasState={activeCanvasState}
           onElementAdd={handleElementAdd}
           onAdSizeChange={handleAdSizeChange}
           selectedElement={selectedElement}
+          isResponsiveMode={isResponsiveMode}
+          currentFormat={currentFormat}
         />
       </div>
 
       {/* Main Canvas Area */}
       <div className="flex-1 flex pt-16">
         {/* Canvas Workspace */}
-        <div className="flex-1 flex items-center justify-center p-8 bg-gray-100">
-          <div className="relative">
+        <div className="flex-1 flex items-center justify-center p-8 bg-gray-100 relative overflow-auto">
+          <div 
+            className={`relative ${viewportScale < 1 ? 'shadow-lg rounded-lg overflow-hidden bg-white' : ''}`}
+            style={viewportScale < 1 ? {
+              transform: `scale(${viewportScale})`,
+              transformOrigin: 'center center',
+              width: canvasDimensions.width,
+              height: canvasDimensions.height
+            } : {}}
+          >
             <CanvasWorkspace
-              canvasState={canvasState}
+              canvasState={activeCanvasState}
               canvasDimensions={canvasDimensions}
               selectedElementId={selectedElementId}
               onElementSelect={handleElementSelect}
               onElementUpdate={handleElementUpdate}
+              onElementAdd={handleElementAdd}
+              readonly={readonly}
             />
+            
+            {/* Phase 5: Snap Guides */}
+            <SnapGuides
+              elements={activeCanvasState?.elements || []}
+              activeElementId={isDragging ? selectedElementId : null}
+              canvasDimensions={canvasDimensions}
+              showGuides={showSnapGuides}
+              showMeasurements={true}
+            />
+
+            {/* Phase 5: Element Controls */}
+            {selectedElement && !readonly && (
+              <ElementControls
+                element={selectedElement}
+                canvasDimensions={canvasDimensions}
+                isSelected={true}
+                onElementUpdate={handleElementUpdate}
+                onElementGroup={handleElementGroup}
+                onElementUngroup={handleElementUngroup}
+                onElementDelete={handleElementDelete}
+                onElementDuplicate={handleElementDuplicate}
+                onElementLock={handleElementLock}
+                snapGuides={snapGuides}
+                showSnapGuides={showSnapGuides}
+                onSnapGuideCreate={handleSnapGuideCreate}
+              />
+            )}
           </div>
+          
+          {/* Continue Button - Bottom Right Corner */}
+          {!readonly && (
+            <div className="absolute bottom-4 right-4 z-50">
+              <button
+                onClick={handlePublish}
+                className="px-6 py-3 bg-[#F7941D] hover:bg-orange-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center space-x-2"
+                title="Continue to next step"
+              >
+                <span>Continue</span>
+                <span className="text-lg">→</span>
+              </button>
+            </div>
+          )}
+
+          {/* Scale Controls */}
+          {showScaleControls && (
+            <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white text-xs px-3 py-2 rounded-lg flex items-center space-x-2 z-50">
+              <span>Scale: {Math.round(viewportScale * 100)}%</span>
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => {
+                    if (onScaleChange) {
+                      const newScale = Math.min(viewportScale + 0.1, 1);
+                      onScaleChange(newScale);
+                    }
+                  }}
+                  className="text-white hover:text-gray-300 text-sm"
+                  title="Zoom In"
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => {
+                    if (onScaleChange) {
+                      const newScale = Math.max(viewportScale - 0.1, 0.1);
+                      onScaleChange(newScale);
+                    }
+                  }}
+                  className="text-white hover:text-gray-300 text-sm"
+                  title="Zoom Out"
+                >
+                  -
+                </button>
+                <button
+                  onClick={() => {
+                    if (onFitToScreen) {
+                      onFitToScreen();
+                    }
+                  }}
+                  className="text-white hover:text-gray-300 text-xs px-1"
+                  title="Fit to Screen"
+                >
+                  FIT
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Design Controls Panel */}
-        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-          <DesignControls
-            canvasState={canvasState}
-            selectedElement={selectedElement}
-            onElementUpdate={handleElementUpdate}
-            onBackgroundChange={handleBackgroundChange}
-            onPublish={handlePublish}
-            campaignSettings={campaignSettings}
-          />
-        </div>
+        {/* Design Controls Panel - Always show unless readonly */}
+        {!readonly && (
+          <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
+            <DesignControls
+              key="design-controls-panel"
+              canvasState={activeCanvasState}
+              selectedElement={selectedElement}
+              onElementUpdate={handleElementUpdate}
+              onElementAdd={handleElementAdd}
+              onBackgroundChange={handleBackgroundChange}
+              onPublish={handlePublish}
+              campaignSettings={campaignSettings}
+              dbOperations={dbOperations}
+              selectedElementId={selectedElementId}
+              selectedElementIds={selectedElementIds}
+              onElementSelect={handleElementSelect}
+              onElementDelete={handleElementDelete}
+              onElementDuplicate={handleElementDuplicate}
+              onElementLock={handleElementLock}
+              onElementGroup={handleElementGroup}
+              onElementUngroup={handleElementUngroup}
+              onLayerReorder={handleLayerReorder}
+              onMultiElementUpdate={handleMultiElementUpdate}
+              readonly={readonly}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
