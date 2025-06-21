@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BackgroundService } from '../services/backgroundService.js';
-import { ImageResizeService } from '../services/imageResizeService.js';
 import { BACKGROUND_STATUS } from '../constants/backgroundPrompts.js';
 import BackgroundPromptSelector from './BackgroundPromptSelector.jsx';
 import BackgroundVersionManager from './BackgroundVersionManager.jsx';
@@ -9,7 +8,7 @@ import BackgroundVersionManager from './BackgroundVersionManager.jsx';
  * BackgroundCustomizer Component
  * Main component for customizing product image backgrounds
  */
-function BackgroundCustomizer({ 
+const BackgroundCustomizer = React.memo(function BackgroundCustomizer({ 
   product, 
   imageId, 
   onBackgroundChange, 
@@ -22,23 +21,40 @@ function BackgroundCustomizer({
   const [processingStatus, setProcessingStatus] = useState('');
   const [error, setError] = useState(null);
   const [currentProduct, setCurrentProduct] = useState(product);
+  const [latestGeneratedImage, setLatestGeneratedImage] = useState(null); // Track the latest generated image
 
-  // Find the current image - different logic for product vs creative mode
-  const workingImage = mode === "creative" 
-    ? { url: currentImage, id: imageId } // In creative mode, currentImage is the URL
-    : currentProduct?.images?.find(img => img.id === imageId); // In product mode, find by ID
+  // Memoize the working image to prevent unnecessary re-renders
+  const workingImage = useMemo(() => {
+    return mode === "creative" 
+      ? { url: currentImage, id: imageId } // In creative mode, currentImage is the URL
+      : currentProduct?.images?.find(img => img.id === imageId); // In product mode, find by ID
+  }, [mode, currentImage, imageId, currentProduct]);
+  
+  // Memoize display image URL to prevent unnecessary re-renders
+  const displayImageUrl = useMemo(() => {
+    return mode === "creative" 
+      ? (latestGeneratedImage || currentImage) // Show latest generated image if available, otherwise original
+      : (dbOperations?.getActiveImageUrl?.(currentProduct, imageId) || workingImage?.url);
+  }, [mode, latestGeneratedImage, currentImage, dbOperations, currentProduct, imageId, workingImage]);
   
   // Get current active background version (only applies to product mode)
-  const activeBackgroundVersion = mode === "product" 
-    ? workingImage?.backgroundVersions?.find(v => v.isActive)
-    : null;
+  const activeBackgroundVersion = useMemo(() => {
+    return mode === "product" 
+      ? workingImage?.backgroundVersions?.find(v => v.isActive)
+      : null;
+  }, [mode, workingImage]);
+  
   const currentActiveVersionId = activeBackgroundVersion?.id || null;
 
+  // Only update currentProduct when product actually changes
   useEffect(() => {
+    if (product && product !== currentProduct) {
     setCurrentProduct(product);
+    }
   }, [product]);
 
-  const handlePromptSelect = async (prompt, description) => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handlePromptSelect = useCallback(async (prompt, description) => {
     if (!workingImage || !BackgroundService.isEnabled()) {
       setError('Background change service is not available');
       return;
@@ -64,10 +80,14 @@ function BackgroundCustomizer({
 
       // Change the background
       const result = await BackgroundService.changeBackground(uploadedUrl, prompt);
+      
+      console.log('BackgroundCustomizer received result:', result);
+      console.log('Result imageUrl:', result.imageUrl);
 
       if (result.success) {
         if (mode === "creative") {
           // In creative mode, directly call the callback with the new image URL
+          setLatestGeneratedImage(result.imageUrl); // Store the latest generated image locally
           onBackgroundChange?.(result.imageUrl);
           setProcessingStatus('Background change completed!');
           
@@ -77,23 +97,23 @@ function BackgroundCustomizer({
           }, 3000);
         } else {
           // In product mode, save to database
-          const saveResult = dbOperations.addBackgroundVersion(
-            currentProduct.id,
-            imageId,
-            result
-          );
+        const saveResult = dbOperations.addBackgroundVersion(
+          currentProduct.id,
+          imageId,
+          result
+        );
 
-          if (saveResult.success) {
-            setCurrentProduct(saveResult.product);
-            onBackgroundChange?.(saveResult.product);
-            setProcessingStatus('Background change completed!');
-            
-            // Clear success message after a delay
-            setTimeout(() => {
-              setProcessingStatus('');
-            }, 3000);
-          } else {
-            throw new Error(saveResult.error);
+        if (saveResult.success) {
+          setCurrentProduct(saveResult.product);
+          onBackgroundChange?.(saveResult.product);
+          setProcessingStatus('Background change completed!');
+          
+          // Clear success message after a delay
+          setTimeout(() => {
+            setProcessingStatus('');
+          }, 3000);
+        } else {
+          throw new Error(saveResult.error);
           }
         }
       } else {
@@ -106,13 +126,20 @@ function BackgroundCustomizer({
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [workingImage, onPromptChange, mode, dbOperations, currentProduct, imageId, onBackgroundChange]);
 
-  const handleCustomPrompt = async (customPrompt) => {
+  const handleCustomPrompt = useCallback(async (customPrompt) => {
     await handlePromptSelect(customPrompt, 'Custom Background');
-  };
+  }, [handlePromptSelect]);
 
-  const handleVersionSelect = async (versionId) => {
+  const handleResetImage = useCallback(() => {
+    if (mode === "creative") {
+      setLatestGeneratedImage(null);
+      onBackgroundChange?.(currentImage); // Reset to original image
+    }
+  }, [mode, onBackgroundChange, currentImage]);
+
+  const handleVersionSelect = useCallback(async (versionId) => {
     try {
       const result = dbOperations.setActiveBackgroundVersion(
         currentProduct.id,
@@ -130,9 +157,9 @@ function BackgroundCustomizer({
       console.error('Error selecting background version:', error);
       setError(error.message);
     }
-  };
+  }, [dbOperations, currentProduct, imageId, onBackgroundChange]);
 
-  const handleVersionDelete = async (versionId) => {
+  const handleVersionDelete = useCallback(async (versionId) => {
     try {
       const result = dbOperations.deleteBackgroundVersion(
         currentProduct.id,
@@ -150,9 +177,7 @@ function BackgroundCustomizer({
       console.error('Error deleting background version:', error);
       setError(error.message);
     }
-  };
-
-
+  }, [dbOperations, currentProduct, imageId, onBackgroundChange]);
 
   if (!BackgroundService.isEnabled()) {
     return (
@@ -237,17 +262,34 @@ function BackgroundCustomizer({
 
       {/* Current image preview */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           Current Image
         </h3>
+          {latestGeneratedImage && mode === "creative" && (
+            <button
+              onClick={handleResetImage}
+              className="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 font-medium"
+            >
+              Reset to Original
+            </button>
+          )}
+        </div>
         <div className="flex justify-center">
           <div className="relative w-64 h-64 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
             <img
-              key={mode === "creative" ? workingImage.url : (dbOperations.getActiveImageUrl(currentProduct, imageId) || workingImage.url)}
-              src={mode === "creative" ? workingImage.url : (dbOperations.getActiveImageUrl(currentProduct, imageId) || workingImage.url)}
-              alt={workingImage.altText || 'Product image'}
+              key={displayImageUrl}
+              src={displayImageUrl}
+              alt={workingImage?.altText || 'Product image'}
               className="w-full h-full object-contain"
             />
+            {latestGeneratedImage && mode === "creative" && (
+              <div className="absolute top-2 right-2">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                  AI Generated
+                </span>
+              </div>
+            )}
             {activeBackgroundVersion && mode === "product" && (
               <div className="absolute top-2 right-2">
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
@@ -259,8 +301,6 @@ function BackgroundCustomizer({
           </div>
         </div>
       </div>
-
-
 
       {/* Background prompt selector */}
       <BackgroundPromptSelector
@@ -288,15 +328,15 @@ function BackgroundCustomizer({
 
       {/* Background version manager - only show in product mode */}
       {mode === "product" && (
-        <BackgroundVersionManager
+      <BackgroundVersionManager
           image={workingImage}
-          onVersionSelect={handleVersionSelect}
-          onVersionDelete={handleVersionDelete}
-          currentActiveVersion={currentActiveVersionId}
-        />
+        onVersionSelect={handleVersionSelect}
+        onVersionDelete={handleVersionDelete}
+        currentActiveVersion={currentActiveVersionId}
+      />
       )}
     </div>
   );
-}
+});
 
 export default BackgroundCustomizer; 
