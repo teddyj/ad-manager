@@ -3,7 +3,7 @@ import CampaignManager from '../components/CampaignManager';
 
 /**
  * Enhanced Publish Manager Step - Phase 5
- * Final step in Campaign Flow V2 with campaign review, validation, launch capabilities, and post-launch management
+ * Final step in Campaign Flow V2 with campaign review, validation, launch capabilities, campaign saving, and post-launch management
  */
 
 const PublishManager = ({ 
@@ -31,11 +31,14 @@ const PublishManager = ({
     },
     platformConnections: {},
     testMode: true,
-    launched: false
+    launched: false,
+    saved: false,
+    savedAt: null
   });
 
   const [activeTab, setActiveTab] = useState('review');
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [launchProgress, setLaunchProgress] = useState(0);
   const [platformStatuses, setPlatformStatuses] = useState({});
   const [validationResults, setValidationResults] = useState(null);
@@ -151,6 +154,21 @@ const PublishManager = ({
     };
   };
 
+  // Simplified validation for saving (drafts can be incomplete)
+  const validateForSaving = () => {
+    const errors = [];
+
+    // Only require campaign name for saving
+    if (!publishData.campaignName.trim()) {
+      errors.push('Campaign name is required to save');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  };
+
   // Calculate campaign optimization score
   const calculateCampaignScore = () => {
     let score = 0;
@@ -199,28 +217,68 @@ const PublishManager = ({
       [platformId]: {
         connected: true,
         connecting: false,
-        accountId: `account_${Math.random().toString(36).substr(2, 9)}`,
-        accountName: `Business Account ${platformId.toUpperCase()}`,
-        permissions: ['CREATE_CAMPAIGNS', 'MANAGE_ADS', 'VIEW_INSIGHTS']
+        accountName: `${platformId}@yourcompany.com`,
+        accountId: `${platformId}_acc_${Math.random().toString(36).substr(2, 9)}`
       }
     }));
-
-    const newConnections = { ...publishData.platformConnections };
-    newConnections[platformId] = {
-      connected: true,
-      connectedAt: new Date().toISOString()
-    };
-
-    handlePublishUpdate({ platformConnections: newConnections });
   };
 
-  // Campaign launch process
+  // Save campaign without launching
+  const saveCampaign = async () => {
+    setIsSaving(true);
+    
+    try {
+      // Simulate saving campaign to campaign manager
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Generate campaign ID
+      const campaignId = `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Update publish data
+      const savedCampaignData = {
+        ...publishData,
+        saved: true,
+        savedAt: new Date().toISOString(),
+        campaignId,
+        status: 'draft'
+      };
+      
+      setPublishData(savedCampaignData);
+      handlePublishUpdate(savedCampaignData);
+      
+      // Store in localStorage as a saved campaign (simulate campaign manager storage)
+      const savedCampaigns = JSON.parse(localStorage.getItem('saved_campaigns') || '[]');
+      const campaignToSave = {
+        id: campaignId,
+        name: publishData.campaignName,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        savedAt: new Date().toISOString(),
+        data: {
+          ...campaignData,
+          publish: savedCampaignData
+        },
+        summary: campaignSummary
+      };
+      
+      savedCampaigns.push(campaignToSave);
+      localStorage.setItem('saved_campaigns', JSON.stringify(savedCampaigns));
+      
+    } catch (error) {
+      console.error('Failed to save campaign:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Launch campaign
   const launchCampaign = async () => {
     setIsLaunching(true);
     setLaunchProgress(0);
 
     const steps = [
       'Validating campaign data...',
+      'Saving campaign...',
       'Connecting to platforms...',
       'Uploading creatives...',
       'Setting up targeting...',
@@ -230,16 +288,33 @@ const PublishManager = ({
     ];
 
     try {
+      // First save the campaign if not already saved
+      if (!publishData.saved) {
+        await saveCampaign();
+      }
+
       for (let i = 0; i < steps.length; i++) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         setLaunchProgress(((i + 1) / steps.length) * 100);
       }
 
-      handlePublishUpdate({ 
+      const launchedData = {
         launched: true,
         launchedAt: new Date().toISOString(),
-        campaignIds: generateCampaignIds()
-      });
+        campaignIds: generateCampaignIds(),
+        status: 'active'
+      };
+
+      handlePublishUpdate(launchedData);
+
+      // Update saved campaign status to 'active' in localStorage
+      const savedCampaigns = JSON.parse(localStorage.getItem('saved_campaigns') || '[]');
+      const updatedCampaigns = savedCampaigns.map(campaign => 
+        campaign.id === publishData.campaignId || campaign.name === publishData.campaignName
+          ? { ...campaign, status: 'active', launchedAt: launchedData.launchedAt }
+          : campaign
+      );
+      localStorage.setItem('saved_campaigns', JSON.stringify(updatedCampaigns));
 
     } catch (error) {
       console.error('Campaign launch failed:', error);
@@ -637,6 +712,33 @@ const PublishManager = ({
 
         {activeTab === 'launch' && (
           <div className="space-y-6">
+            {publishData.saved && !publishData.launched && (
+              <div className="text-center py-6 bg-blue-50 rounded-lg border border-blue-200">
+                <span className="text-4xl block mb-2">💾</span>
+                <h4 className="text-xl font-bold text-blue-600 mb-2">Campaign Saved Successfully!</h4>
+                <p className="text-gray-600 mb-4">Your campaign has been saved to the campaign manager. You can launch it now or later.</p>
+                
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 max-w-2xl mx-auto">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-blue-600">{publishData.campaignName}</p>
+                    <p className="text-xs text-gray-600">Campaign Name</p>
+                  </div>
+                                     <div className="text-center">
+                     <p className="text-lg font-bold text-blue-600">{publishData.savedAt ? new Date(publishData.savedAt).toLocaleDateString() : 'N/A'}</p>
+                     <p className="text-xs text-gray-600">Saved Date</p>
+                   </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-blue-600">{(campaignData?.platforms?.selectedPlatforms || []).length}</p>
+                    <p className="text-xs text-gray-600">Platforms</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-blue-600">${campaignSummary.totalBudget}</p>
+                    <p className="text-xs text-gray-600">Total Budget</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {publishData.launched ? (
               <div className="space-y-6">
                 {/* Launch Success Banner */}
@@ -766,40 +868,82 @@ const PublishManager = ({
                   </div>
                 </div>
 
-                {/* Launch Button */}
-                <div className="text-center">
-                  <button
-                    onClick={launchCampaign}
-                    disabled={isLaunching || !validationResults?.valid || !allApproved || !allPlatformsConnected || !publishData.campaignName}
-                    className={`inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg shadow-sm text-white transition-colors ${
-                      isLaunching || !validationResults?.valid || !allApproved || !allPlatformsConnected || !publishData.campaignName
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700 focus:ring-2 focus:ring-green-500'
-                    }`}
-                  >
-                    {isLaunching ? (
-                      <>
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                        Launching Campaign...
-                      </>
+                {/* Action Buttons */}
+                <div className="space-y-4">
+                  {/* Save Campaign Button */}
+                  <div className="text-center">
+                    <button
+                      onClick={saveCampaign}
+                      disabled={isSaving || !validateForSaving().valid || publishData.saved}
+                      className={`inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg shadow-sm text-white transition-colors mr-4 ${
+                        isSaving || !validateForSaving().valid || publishData.saved
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'
+                      }`}
+                    >
+                      {isSaving ? (
+                        <>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                          Saving Campaign...
+                        </>
+                      ) : publishData.saved ? (
+                        <>
+                          <span className="mr-2">✅</span>
+                          Campaign Saved
+                        </>
+                      ) : (
+                        <>
+                          <span className="mr-2">💾</span>
+                          Save Campaign
+                        </>
+                      )}
+                    </button>
+
+                    {/* Launch Campaign Button */}
+                    <button
+                      onClick={launchCampaign}
+                      disabled={isLaunching || !validationResults?.valid || !allApproved || !allPlatformsConnected || !publishData.campaignName}
+                      className={`inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg shadow-sm text-white transition-colors ${
+                        isLaunching || !validationResults?.valid || !allApproved || !allPlatformsConnected || !publishData.campaignName
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 focus:ring-2 focus:ring-green-500'
+                      }`}
+                    >
+                      {isLaunching ? (
+                        <>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                          Launching Campaign...
+                        </>
+                      ) : (
+                        <>
+                          <span className="mr-2">🚀</span>
+                          {publishData.saved ? 'Launch Saved Campaign' : 'Launch Campaign'}
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Helper Text */}
+                  <div className="text-center text-sm text-gray-500">
+                    {!publishData.saved ? (
+                      <p>💡 Save your campaign to access it later from the Campaign Manager, or launch it immediately.</p>
                     ) : (
-                      <>
-                        <span className="mr-2">🚀</span>
-                        Launch Campaign
-                      </>
+                      <p>✅ Campaign saved! You can now launch it or access it later from the Campaign Manager.</p>
                     )}
-                  </button>
+                  </div>
                   
-                  {isLaunching && (
+                  {(isLaunching || isSaving) && (
                     <div className="mt-4">
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
-                          className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${launchProgress}%` }}
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            isLaunching ? 'bg-green-600' : 'bg-blue-600'
+                          }`}
+                          style={{ width: `${isLaunching ? launchProgress : 100}%` }}
                         ></div>
                       </div>
-                      <p className="text-sm text-gray-600 mt-2">
-                        {Math.round(launchProgress)}% complete
+                      <p className="text-sm text-gray-600 mt-2 text-center">
+                        {isLaunching ? `${Math.round(launchProgress)}% complete` : 'Saving...'}
                       </p>
                     </div>
                   )}
