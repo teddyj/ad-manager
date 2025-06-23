@@ -6,5 +6,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "regions": ["sfo1"]
+  "regions": ["sfo1"],
+  "env": {
+    "VITE_NEW_CAMPAIGN_FLOW": "true",
+    "VITE_CREATIVE_AI": "true"
+  }
 } 
