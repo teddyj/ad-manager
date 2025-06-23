@@ -135,9 +135,19 @@ const FlowProgress = ({ steps, currentStep, completedSteps = [], onStepClick }) 
         
         {/* Progress Summary */}
         <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-          <span>
-            Step {currentStep + 1} of {steps.length}
-          </span>
+          <div className="flex items-center space-x-4">
+            <span>
+              Step {currentStep + 1} of {steps.length}
+            </span>
+            
+            {/* Browser Back Button Indicator */}
+            <div className="flex items-center text-xs text-gray-400">
+              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span>You can use your browser's back button</span>
+            </div>
+          </div>
           
           <span>
             {completedSteps.length} of {steps.length} completed

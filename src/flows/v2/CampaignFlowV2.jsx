@@ -23,6 +23,7 @@ import FlowNavigation from './components/FlowNavigation';
  * - Platform-aware creative optimization
  * - Budget allocation and management
  * - Real-time validation and recommendations
+ * - Browser back button support with URL fragments
  */
 
 const FLOW_STEPS = [
@@ -32,7 +33,8 @@ const FLOW_STEPS = [
     description: 'Choose your product and upload images',
     icon: '📦',
     component: ProductSelection,
-    required: true
+    required: true,
+    urlFragment: '#step-product'
   },
   {
     id: 'audience',
@@ -40,7 +42,8 @@ const FLOW_STEPS = [
     description: 'Define your target audience',
     icon: '🎯',
     component: AudienceBuilder,
-    required: true
+    required: true,
+    urlFragment: '#step-audience'
   },
   {
     id: 'platforms',
@@ -48,7 +51,8 @@ const FLOW_STEPS = [
     description: 'Choose advertising platforms and budgets',
     icon: '🚀',
     component: PlatformSelector,
-    required: true
+    required: true,
+    urlFragment: '#step-platforms'
   },
   {
     id: 'creative',
@@ -56,7 +60,8 @@ const FLOW_STEPS = [
     description: 'Generate and customize ad creatives',
     icon: '🎨',
     component: CreativeBuilder,
-    required: true
+    required: true,
+    urlFragment: '#step-creative'
   },
   {
     id: 'publish',
@@ -64,7 +69,8 @@ const FLOW_STEPS = [
     description: 'Review and launch your campaign',
     icon: '📢',
     component: PublishManager,
-    required: true
+    required: true,
+    urlFragment: '#step-publish'
   }
 ];
 
@@ -103,13 +109,71 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
       onCancel?.();
     }
   }, [onCancel]);
+
+  // Browser history management for Campaign Flow V2
+  const updateUrlFragment = useCallback((stepIndex) => {
+    const step = FLOW_STEPS[stepIndex];
+    if (step?.urlFragment && window.location.hash !== step.urlFragment) {
+      // Use replaceState to avoid creating too many history entries during initial setup
+      const method = window.location.hash ? 'pushState' : 'replaceState';
+      window.history[method](null, '', step.urlFragment);
+    }
+  }, []);
+
+  // Validate if a step transition is allowed based on current progress
+  const validateStepTransition = useCallback((fromStepIndex, toStepIndex) => {
+    // Allow going backward to any previous step
+    if (toStepIndex <= fromStepIndex) {
+      return true;
+    }
+    
+    // Allow going forward only to the next step if current step is valid
+    if (toStepIndex === fromStepIndex + 1) {
+      const currentStepId = FLOW_STEPS[fromStepIndex]?.id;
+      return stepValidation[currentStepId]?.valid || false;
+    }
+    
+    // Don't allow skipping steps forward
+    return false;
+  }, [stepValidation]);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const hash = window.location.hash;
+      
+      // Find step index from URL fragment
+      const stepIndex = FLOW_STEPS.findIndex(step => step.urlFragment === hash);
+      
+      if (stepIndex !== -1 && stepIndex !== currentStep) {
+        // Validate if the transition is allowed
+        const isValidTransition = validateStepTransition(currentStep, stepIndex);
+        
+        if (isValidTransition) {
+          setCurrentStep(stepIndex);
+          setErrors({}); // Clear errors when navigating via browser
+        } else {
+          // If transition is not valid, update URL to match current valid state
+          updateUrlFragment(currentStep);
+        }
+      }
+    };
+
+    // Set initial fragment when component mounts or step changes
+    updateUrlFragment(currentStep);
+
+    // Listen for browser navigation events
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentStep, updateUrlFragment, validateStepTransition]);
   
   // Get current step configuration
   const getCurrentStep = () => FLOW_STEPS[currentStep];
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === FLOW_STEPS.length - 1;
   
-  // Step navigation handlers
+  // Enhanced step navigation handlers with URL updates
   const handleNext = useCallback(async () => {
     const step = getCurrentStep();
     
@@ -126,14 +190,16 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     
     try {
       // Perform any async validation or data processing
-      await validateStepTransition(step.id, stepData[step.id]);
+      await validateStepData(step.id, stepData[step.id]);
       
       if (isLastStep) {
         // Complete the flow
         await handleComplete();
       } else {
-        // Move to next step
-        setCurrentStep(prev => Math.min(prev + 1, FLOW_STEPS.length - 1));
+        // Move to next step and update URL
+        const nextStep = currentStep + 1;
+        setCurrentStep(nextStep);
+        updateUrlFragment(nextStep);
       }
     } catch (error) {
       setErrors(prev => ({
@@ -143,26 +209,63 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     } finally {
       setIsLoading(false);
     }
-  }, [currentStep, stepData, stepValidation, isLastStep]);
+  }, [currentStep, stepData, stepValidation, isLastStep, updateUrlFragment]);
   
   const handlePrevious = useCallback(() => {
-    setCurrentStep(prev => Math.max(prev - 1, 0));
+    const previousStep = Math.max(currentStep - 1, 0);
+    setCurrentStep(previousStep);
+    updateUrlFragment(previousStep);
     setErrors({}); // Clear errors when going back
-  }, []);
+  }, [currentStep, updateUrlFragment]);
   
   const handleStepJump = useCallback((stepIndex) => {
-    // Only allow jumping to completed steps or the next immediate step
-    const maxAllowedStep = Math.max(
-      ...Object.keys(stepValidation)
-        .filter(stepId => stepValidation[stepId]?.valid)
-        .map(stepId => FLOW_STEPS.findIndex(step => step.id === stepId))
-    ) + 1;
+    // Validate step transition
+    const isValidTransition = validateStepTransition(currentStep, stepIndex);
     
-    if (stepIndex <= maxAllowedStep) {
+    if (isValidTransition) {
       setCurrentStep(stepIndex);
+      updateUrlFragment(stepIndex);
       setErrors({});
     }
-  }, [stepValidation]);
+  }, [currentStep, validateStepTransition, updateUrlFragment]);
+
+  // Validation helper for step data (used in handleNext)
+  const validateStepData = async (stepId, data) => {
+    // Implement step-specific validation logic
+    switch (stepId) {
+      case 'product':
+        if (!data?.images?.length) {
+          throw new Error('At least one product image is required');
+        }
+        break;
+      
+      case 'audience':
+        // Much more lenient validation - audience can have default demographics
+        if (!data) {
+          throw new Error('Audience configuration is required');
+        }
+        // Allow proceeding with any basic audience data
+        break;
+      
+      case 'platforms':
+        // Disable flow-level validation - rely on step validation instead
+        // if (!data?.selectedPlatforms?.length) {
+        //   throw new Error('At least one platform must be selected');
+        // }
+        break;
+      
+      case 'creative':
+        // Allow proceeding with minimum creative requirements
+        if (!data?.selectedFormats || data.selectedFormats.length === 0) {
+          throw new Error('Select at least one creative format to proceed');
+        }
+        // Allow proceeding without generated creatives - user can generate them later
+        break;
+      
+      default:
+        break;
+    }
+  };
   
   // Step data management
   const updateStepData = useCallback((stepId, data) => {
@@ -652,44 +755,6 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     }
   };
   
-  // Validation helper
-  const validateStepTransition = async (stepId, data) => {
-    // Implement step-specific validation logic
-    switch (stepId) {
-      case 'product':
-        if (!data?.images?.length) {
-          throw new Error('At least one product image is required');
-        }
-        break;
-      
-      case 'audience':
-        // Much more lenient validation - audience can have default demographics
-        if (!data) {
-          throw new Error('Audience configuration is required');
-        }
-        // Allow proceeding with any basic audience data
-        break;
-      
-      case 'platforms':
-        // Disable flow-level validation - rely on step validation instead
-        // if (!data?.selectedPlatforms?.length) {
-        //   throw new Error('At least one platform must be selected');
-        // }
-        break;
-      
-      case 'creative':
-        // Allow proceeding with minimum creative requirements
-        if (!data?.selectedFormats || data.selectedFormats.length === 0) {
-          throw new Error('Select at least one creative format to proceed');
-        }
-        // Allow proceeding without generated creatives - user can generate them later
-        break;
-      
-      default:
-        break;
-    }
-  };
-  
   // Save campaign data (placeholder)
   const saveCampaignData = async (data) => {
     // TODO: Implement actual data persistence
@@ -859,6 +924,16 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onCancel]);
+
+  // Cleanup URL fragment when component unmounts
+  useEffect(() => {
+    return () => {
+      // Reset to the main campaign flow hash when leaving the component
+      if (window.location.hash.startsWith('#step-')) {
+        window.history.replaceState(null, '', '#campaign-flow-v2');
+      }
+    };
+  }, []);
   
   return (
     <div className="min-h-screen bg-gray-50">

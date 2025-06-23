@@ -5306,14 +5306,21 @@ function App() {
                         updateUrlFragment(currentView);
                     }
                 }
+            } else if (appView === APP_VIEW_CAMPAIGN_FLOW_V2) {
+                // Campaign Flow V2 handles its own navigation internally
+                const hash = window.location.hash;
+                if (!hash.startsWith('#step-') && hash !== '#campaign-flow-v2') {
+                    // If someone navigates to a non-step hash while in V2, handle it
+                    handleInitialHash();
+                }
             }
         };
 
         // Check for initial hash on page load to determine which view to show
         const handleInitialHash = () => {
             const hash = window.location.hash;
-            if (hash === '#campaign-builder-v2' || hash === '#campaign-flow-v2') {
-                // Navigate to Campaign Builder V2
+            if (hash === '#campaign-builder-v2' || hash === '#campaign-flow-v2' || hash.startsWith('#step-')) {
+                // Navigate to Campaign Builder V2 (including step-specific hashes)
                 setAppView(APP_VIEW_CAMPAIGN_FLOW_V2);
                 setSelectedProduct(null);
             } else if (hash === '#campaign-setup') {
