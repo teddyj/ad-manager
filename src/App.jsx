@@ -5280,7 +5280,7 @@ function App() {
         }
     };
 
-    // Handle browser back/forward navigation
+    // Handle browser back/forward navigation and initial hash detection
     useEffect(() => {
         const handlePopState = () => {
             if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
@@ -5309,9 +5309,35 @@ function App() {
             }
         };
 
+        // Check for initial hash on page load to determine which view to show
+        const handleInitialHash = () => {
+            const hash = window.location.hash;
+            if (hash === '#campaign-builder-v2' || hash === '#campaign-flow-v2') {
+                // Navigate to Campaign Builder V2
+                setAppView(APP_VIEW_CAMPAIGN_FLOW_V2);
+                setSelectedProduct(null);
+            } else if (hash === '#campaign-setup') {
+                // Navigate to legacy Campaign Builder
+                setAppView(APP_VIEW_CAMPAIGN_BUILDER);
+                setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
+                setAdData(null);
+                setCampaignSettings(null);
+            }
+        };
+
         // Set initial fragment when entering Campaign Builder
         if (appView === APP_VIEW_CAMPAIGN_BUILDER) {
             updateUrlFragment(currentView);
+        } else if (appView === APP_VIEW_CAMPAIGN_FLOW_V2) {
+            // Set hash for V2 flow
+            if (window.location.hash !== '#campaign-flow-v2') {
+                window.history.replaceState(null, '', '#campaign-flow-v2');
+            }
+        }
+
+        // Check hash on initial load
+        if (appView !== APP_VIEW_CAMPAIGN_BUILDER && appView !== APP_VIEW_CAMPAIGN_FLOW_V2) {
+            handleInitialHash();
         }
 
         window.addEventListener('popstate', handlePopState);
@@ -5461,8 +5487,8 @@ function App() {
 
     // Function to return to Campaign Manager
     const handleReturnToManager = () => {
-        // Clear URL fragment when leaving Campaign Builder
-        if (appView === APP_VIEW_CAMPAIGN_BUILDER && window.location.hash) {
+        // Clear URL fragment when leaving Campaign Builder or V2 flow
+        if ((appView === APP_VIEW_CAMPAIGN_BUILDER || appView === APP_VIEW_CAMPAIGN_FLOW_V2) && window.location.hash) {
             window.history.replaceState(null, '', window.location.pathname);
         }
         setAppView(APP_VIEW_CAMPAIGN_MANAGER);
@@ -5621,19 +5647,27 @@ function App() {
             <div className="min-h-screen bg-gray-50 flex dark:bg-gray-900">
                 {/* Left Navigation */}
                 <LeftNav onNavigate={(view) => {
-                    // Clear URL fragment when leaving Campaign Builder
-                    if (appView === APP_VIEW_CAMPAIGN_BUILDER && view !== APP_VIEW_CAMPAIGN_BUILDER && window.location.hash) {
-                        window.history.replaceState(null, '', window.location.pathname);
+                    // Clear URL fragment when leaving Campaign Builder or V2 flow
+                    if ((appView === APP_VIEW_CAMPAIGN_BUILDER && view !== APP_VIEW_CAMPAIGN_BUILDER) ||
+                        (appView === APP_VIEW_CAMPAIGN_FLOW_V2 && view !== APP_VIEW_CAMPAIGN_FLOW_V2)) {
+                        if (window.location.hash) {
+                            window.history.replaceState(null, '', window.location.pathname);
+                        }
                     }
+                    
                     setAppView(view);
+                    
                     if (view === APP_VIEW_CAMPAIGN_BUILDER) {
                         setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
                         setAdData(null);
                         setCampaignSettings(null);
                     }
+                    
                     // Reset any selected product when navigating to Campaign Builder V2
                     if (view === APP_VIEW_CAMPAIGN_FLOW_V2) {
                         setSelectedProduct(null);
+                        // Set the V2 hash
+                        window.history.replaceState(null, '', '#campaign-flow-v2');
                     }
                 }} />
 

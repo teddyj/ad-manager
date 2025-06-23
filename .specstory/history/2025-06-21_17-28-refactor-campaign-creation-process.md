@@ -37335,6 +37335,238 @@ Now I can see the navigation structure. Let me look at the specific part where t
 
 ---
 
+Read file: src/App.jsx
+
+---
+
+Now I need to add the new navigation item. First, let me add the new "Campaign Builder (new)" navigation item above the existing "Campaign Builder" in the CREATE section. I'll also need to add the header title handling for the new view.
+
+---
+
+
+
+---
+
+Now I need to find and update the header title section to include the new title for the Campaign Builder V2 flow. Let me check where the header titles are defined:
+
+---
+
+Read file: src/App.jsx
+
+---
+
+Perfect! I can see the navigation has been successfully added and the header title is already there (`appView === APP_VIEW_CAMPAIGN_FLOW_V2 ? 'Campaign Builder (Enhanced)'`). I can also see that the CampaignFlowV2 component is being rendered correctly when `APP_VIEW_CAMPAIGN_FLOW_V2` is selected.
+
+Let me also ensure the navigation handler properly resets the state when navigating to the V2 flow. Let me check the navigation handler:
+
+---
+
+Read file: src/App.jsx
+
+---
+
+I need to find the navigation handler to ensure it properly handles the new V2 flow. Looking at the navigation handler around line 5615:
+
+---
+
+
+
+---
+
+Perfect! Now I've successfully added the new "Campaign Builder (new)" navigation element above the existing "Campaign Builder" in the CREATE section. Here's a summary of what I've implemented:
+
+## Summary of Changes Made:
+
+### 1. **Added New Navigation Item**
+- Added "Campaign Builder (new)" button above the existing "Campaign Builder" in the CREATE section
+- Used a modern "expand" icon (four-way arrows) to represent the enhanced functionality
+- Properly styled with the same hover states and active styling as other navigation items
+
+### 2. **Navigation Functionality**
+- The new navigation item calls `onNavigate(APP_VIEW_CAMPAIGN_FLOW_V2)` which triggers the Campaign Builder V2 workflow
+- Added proper state reset when navigating to the V2 flow (`setSelectedProduct(null)`)
+
+### 3. **Header Title**
+- The header already had support for `APP_VIEW_CAMPAIGN_FLOW_V2` with the title "Campaign Builder (Enhanced)"
+
+### 4. **View Rendering**
+- The CampaignFlowV2 component is properly rendered when the V2 view is selected
+- Includes proper handlers for completion and cancellation that return to the Campaign Manager
+
+## How It Works:
+
+1. **Navigation**: Users can now click "Campaign Builder (new)" in the left sidebar under the CREATE section
+2. **State Management**: When clicked, it navigates to `APP_VIEW_CAMPAIGN_FLOW_V2` and resets any selected product
+3. **Component Rendering**: The main content area renders the `CampaignFlowV2` component with proper handlers
+4. **Completion Flow**: When the V2 flow is completed or cancelled, users are returned to the Campaign Manager
+
+The new navigation element is now available and will direct users to the enhanced Campaign Builder V2 workflow, which includes the improved font sizing and auto-save functionality we implemented earlier.
+
+---
+
+_**User**_
+
+commit and push to github
+
+---
+
+_**Assistant**_
+
+I'll commit the changes and push them to GitHub for you.
+
+---
+
+```bash
+git add .
+```
+
+```
+(base) teddyjawde@MacBook-Pro campaign-builder % 
+
+```
+
+---
+
+```bash
+git commit -m "Add Campaign Builder (new) navigation and reduce font sizes
+
+- Added new 'Campaign Builder (new)' navigation item above existing Campaign Builder
+- Links to enhanced CampaignFlowV2 workflow with improved features
+- Reduced default font sizes for better preview display:
+  - Headline multiplier: 1.4 → 0.6
+  - Body text multiplier: 0.8 → 0.4  
+  - Static font sizes reduced by 4-6px across all text styles
+- Improved text visibility in smaller ad format previews
+- Enhanced auto-save system with storage optimization to prevent quota errors"
+```
+
+```
+<m with storage optimization to prevent quota errors"
+[main 169c884] Add Campaign Builder (new) navigation and reduce font sizes
+ 11 files changed, 11989 insertions(+), 500 deletions(-)
+ create mode 100644 CANVAS_EDIT_FIXES.md
+(base) teddyjawde@MacBook-Pro campaign-builder %
+```
+
+---
+
+```bash
+git push
+```
+
+```
+(base) teddyjawde@MacBook-Pro campaign-builder % git push
+Enumerating objects: 95, done.
+Counting objects: 100% (95/95), done.
+Delta compression using up to 14 threads
+Compressing objects: 100% (65/65), done.
+Writing objects: 100% (70/70), 139.80 KiB | 6.99 MiB/s, done.
+Total 70 (delta 44), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (44/44), completed with 19 local objects.
+To https://github.com/teddyj/ad-manager.git
+   45ab44a..169c884  main -> main
+(base) teddyjawde@MacBook-Pro campaign-builder %
+```
+
+---
+
+Perfect! I've successfully committed and pushed all the changes to GitHub. Here's a summary of what was committed:
+
+## Commit Summary
+
+**Commit Message:** "Add Campaign Builder (new) navigation and reduce font sizes"
+
+**Changes Included:**
+- **11 files changed** with **11,989 insertions** and **500 deletions**
+- **New file created:** `CANVAS_EDIT_FIXES.md` (documentation)
+
+## Key Features Added:
+
+### 1. **New Navigation Item**
+- Added "Campaign Builder (new)" navigation button above the existing Campaign Builder
+- Links to the enhanced CampaignFlowV2 workflow
+- Modern expand icon to represent enhanced functionality
+
+### 2. **Font Size Optimization**
+- **Dynamic sizing reduced:**
+  - Headline multiplier: 1.4 → 0.6 (57% smaller)
+  - Body text multiplier: 0.8 → 0.4 (50% smaller)
+- **Static font sizes reduced:**
+  - Primary headline: 24px → 14px
+  - Secondary headline: 18px → 12px
+  - Body text: 14px → 10px
+  - Large body text: 16px → 11px
+
+### 3. **Enhanced Auto-Save System**
+- Storage optimization to prevent localStorage quota errors
+- Multi-tier storage strategy with data compression
+- Real-time storage monitoring and cleanup
+
+The changes have been successfully pushed to the main branch on GitHub! Users can now access the improved Campaign Builder through the new navigation item, and text will display much better in preview mode with the reduced font sizes.
+
+---
+
+_**User**_
+
+on production, i don't see the new campaign builder v2 flow. the links that work localling go here http://localhost:3000/ but the links to the start of the campaign flow on prod go here @https://ad-manager-gamma.vercel.app/#campaign-setup  how can i see the new flow on production?
+
+---
+
+_**Assistant**_
+
+I see the issue! On production, your app is using URL hash-based routing (notice the `#campaign-setup` in the URL), but locally you're accessing the root path. The new Campaign Builder V2 flow is being added as a separate navigation item, but the production app might not be recognizing it or routing to it correctly.
+
+Let me check how the routing and navigation is set up and help you access the V2 flow on production.
+
+---
+
+<details>
+            <summary>Searched codebase "hash routing campaign-setup URL fragment navigation" • **25** results</summary>
+        
+| File | Lines |
+|------|-------|
+| `src/App.jsx` | L5284-5322 |
+| `src/App.jsx` | L5245-5284 |
+| `src/App.jsx` | L5449-5481 |
+| `src/App.jsx` | L5608-5641 |
+| `src/App.jsx` | L5322-5361 |
+| `src/flows/v2/components/CampaignManager.jsx` | L266-293 |
+| `src/App.jsx` | L4691-4717 |
+| `src/App.jsx` | L4758-4773 |
+| `src/App.jsx` | L5538-5568 |
+| `src/App.jsx` | L4676-4691 |
+| `src/App.jsx` | L5690-5720 |
+| `src/App.jsx` | L1767-1793 |
+| `src/App.jsx` | L5720-5748 |
+| `src/App.jsx` | L1170-1221 |
+| `src/flows/v2/steps/PublishManager.jsx` | L349-374 |
+| `src/App.jsx` | L101-133 |
+| `src/flows/v2/steps/PlatformSelector.jsx` | L352-377 |
+| `src/flows/v2/CampaignFlowV2.jsx` | L71-110 |
+| `src/App.jsx` | L5641-5662 |
+| `src/App.jsx` | L5568-5608 |
+| `src/flows/v2/CampaignFlowV2.jsx` | L709-754 |
+| `src/App.jsx` | L5404-5449 |
+| `src/flows/v2/components/CampaignManager.jsx` | L362-398 |
+| `src/flows/v2/components/CampaignManager.jsx` | L1-52 |
+| `phase1-implementation.md` | L1-51 |
+
+</details>
+
+---
+
+Now I can see the issue! The production app is using hash-based routing (like `#campaign-setup`), and the V2 flow needs to be accessible via a hash route. Let me check how the URL handling works and add the proper hash route for the V2 flow.
+
+---
+
+Read file: src/App.jsx
+
+---
+
+I can see the issue! The hash routing system only handles the old Campaign Builder flow, but there's no hash route defined for the V2 flow. I need to add hash-based URL support for the Campaign Builder V2. Let me add this functionality.
+
+---
+
 
 
 ---
