@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CREATIVE_FORMATS, getFormatsByPlatform, getFormatById } from '../constants/creativeSpecs';
 import CanvasCreativeEditor from '../components/CreativeCanvas/CanvasCreativeEditor.jsx';
+import { generateAIHeadlines, generateAIDescriptions, isOpenAIAvailable } from '../../../services/aiCopyService';
+import AICopySettings from '../../../components/AICopySettings';
 
 /**
  * Enhanced Creative Builder Step - Phase 3
@@ -23,6 +25,12 @@ const CreativeBuilder = ({
       includePrice: true,
       includeCTA: true,
       emphasizeFeatures: true
+    },
+    aiCopySettings: {
+      creativity: 'medium',
+      tone: null, // Auto-detect based on platform
+      keywords: '',
+      model: 'gpt-4o-mini'
     },
     variations: 3,
     aiGenerated: false
@@ -260,7 +268,7 @@ const CreativeBuilder = ({
       // Generate creatives for each selected format
       const newCreatives = {};
       
-      (creativeData?.selectedFormats || []).forEach(formatId => {
+      for (const formatId of (creativeData?.selectedFormats || [])) {
         console.log('Looking for format ID:', formatId);
         const format = getFormatById(formatId);
         
@@ -268,15 +276,19 @@ const CreativeBuilder = ({
           console.error('Format not found for ID:', formatId);
           console.log('Available format IDs:', Object.values(CREATIVE_FORMATS).map(f => f.id));
           console.log('Selected formats array:', creativeData?.selectedFormats);
-          return;
+          continue;
         }
         
         const variations = [];
         
         for (let i = 0; i < creativeData.variations; i++) {
-          const creative = generateCreativeVariation(format, productData, audienceData, platformData, i);
-          if (creative) {
-            variations.push(creative);
+          try {
+            const creative = await generateCreativeVariation(format, productData, audienceData, platformData, i);
+            if (creative) {
+              variations.push(creative);
+            }
+          } catch (error) {
+            console.error(`Failed to generate variation ${i} for format ${formatId}:`, error);
           }
         }
         
@@ -287,7 +299,7 @@ const CreativeBuilder = ({
             selectedVariation: 0
           };
         }
-      });
+      }
       
       setCreativeData(prev => ({
         ...prev,
@@ -313,7 +325,7 @@ const CreativeBuilder = ({
   };
 
   // Generate a single creative variation
-  const generateCreativeVariation = (format, productData, audienceData, platformData, index) => {
+  const generateCreativeVariation = async (format, productData, audienceData, platformData, index) => {
     if (!format) {
       console.error('generateCreativeVariation called with undefined format');
       return null;
@@ -327,9 +339,9 @@ const CreativeBuilder = ({
     const styles = ['A', 'B', 'C'];
     const currentStyle = styles[index] || 'A';
     
-    // Generate headlines based on product and audience
-    const headlines = generateHeadlines(productData, audienceData, index);
-    const descriptions = generateDescriptions(productData, audienceData, index);
+    // Generate headlines based on product and audience (now async)
+    const headlines = await generateHeadlines(productData, audienceData, index);
+    const descriptions = await generateDescriptions(productData, audienceData, index);
     const ctas = generateCTAs(platformData?.campaignObjective, index);
     
     // Default to saved product data from Product Selection step
@@ -577,12 +589,13 @@ const CreativeBuilder = ({
   };
 
   // Generate smart headlines
-  const generateHeadlines = (productData, audienceData, variation) => {
+  const generateHeadlines = async (productData, audienceData, variation) => {
     // Default to saved product data from Product Selection step
-    const productName = productData?.name || campaignData?.product?.name || 'Our Product';
-    const brand = productData?.brand || campaignData?.product?.brand || '';
-    const category = productData?.category || campaignData?.product?.category || 'product';
-    const price = productData?.price || campaignData?.product?.price;
+    const product = productData || campaignData?.product || {};
+    const productName = product.name || 'Our Product';
+    const brand = product.brand || '';
+    const category = product.category || 'product';
+    const price = product.price;
     
     // Log when defaulting to saved data in headlines for debugging
     if (!productData?.name && campaignData?.product?.name) {
@@ -592,7 +605,36 @@ const CreativeBuilder = ({
       console.log('📝 Headlines using saved product brand:', campaignData.product.brand);
     }
     
-    // Use brand in headlines when available
+    // Get platform data for context
+    const platformData = {
+      platform: campaignData?.platforms?.selectedPlatforms?.[0] || 'meta',
+      campaignObjective: campaignData?.platforms?.campaignObjective || 'awareness'
+    };
+    
+    // Use AI generation if available
+    if (isOpenAIAvailable() && import.meta.env.VITE_CREATIVE_AI === 'true') {
+      try {
+        console.log('🤖 Generating AI headlines...');
+        const aiHeadlines = await generateAIHeadlines(
+          product,
+          audienceData,
+          platformData,
+          creativeData.aiCopySettings
+        );
+        
+        // Add price if requested and available
+        if (price && creativeData.generationSettings.includePrice) {
+          const brandedName = brand && brand !== productName ? `${brand} ${productName}` : productName;
+          aiHeadlines.push(`${brandedName} - From $${price}`);
+        }
+        
+        return aiHeadlines;
+      } catch (error) {
+        console.warn('⚠️ AI headline generation failed, using fallback templates:', error.message);
+      }
+    }
+    
+    // Fallback to template system
     const brandedName = brand && brand !== productName ? `${brand} ${productName}` : productName;
     
     const templates = [
@@ -611,18 +653,41 @@ const CreativeBuilder = ({
   };
 
   // Generate smart descriptions
-  const generateDescriptions = (productData, audienceData, variation) => {
+  const generateDescriptions = async (productData, audienceData, variation) => {
     // Default to saved product data from Product Selection step
-    const productName = productData?.name || campaignData?.product?.name || 'our product';
-    const brand = productData?.brand || campaignData?.product?.brand || '';
-    const description = productData?.description || campaignData?.product?.description || 'amazing features';
-    const category = productData?.category || campaignData?.product?.category || '';
-    
-    // Use brand in descriptions when available
-    const brandedName = brand && brand !== productName ? `${brand} ${productName}` : productName;
+    const product = productData || campaignData?.product || {};
+    const productName = product.name || 'our product';
+    const brand = product.brand || '';
+    const description = product.description || 'amazing features';
+    const category = product.category || '';
     
     // Log category usage in descriptions
     console.log('🏷️ CreativeBuilder category for descriptions:', category);
+    
+    // Get platform data for context
+    const platformData = {
+      platform: campaignData?.platforms?.selectedPlatforms?.[0] || 'meta',
+      campaignObjective: campaignData?.platforms?.campaignObjective || 'awareness'
+    };
+    
+    // Use AI generation if available
+    if (isOpenAIAvailable() && import.meta.env.VITE_CREATIVE_AI === 'true') {
+      try {
+        console.log('🤖 Generating AI descriptions...');
+        const aiDescriptions = await generateAIDescriptions(
+          product,
+          audienceData,
+          platformData,
+          creativeData.aiCopySettings
+        );
+        return aiDescriptions;
+      } catch (error) {
+        console.warn('⚠️ AI description generation failed, using fallback templates:', error.message);
+      }
+    }
+    
+    // Fallback to template system
+    const brandedName = brand && brand !== productName ? `${brand} ${productName}` : productName;
     
     // Enhance description with category context
     const enhancedDescription = category && description !== 'amazing features' 
@@ -867,6 +932,13 @@ const CreativeBuilder = ({
 
         {activeTab === 'settings' && (
           <div className="space-y-6">
+            {/* AI Copy Settings */}
+            <AICopySettings
+              settings={creativeData.aiCopySettings}
+              onSettingsChange={(newSettings) => handleCreativeUpdate({ aiCopySettings: newSettings })}
+              className="mb-6"
+            />
+
             {/* Creative Style */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
