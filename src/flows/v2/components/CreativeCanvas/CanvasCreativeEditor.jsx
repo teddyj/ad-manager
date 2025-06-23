@@ -104,12 +104,17 @@ const CanvasCreativeEditor = ({
 
   // Fit canvas to container
   const fitToScreen = () => {
-    setCanvasScale(0.8);
+    setCanvasScale(0.6); // Smaller scale for better editing
   };
 
   // Reset canvas scale
   const resetScale = () => {
     setCanvasScale(1);
+  };
+
+  // Shrink canvas for editing
+  const shrinkForEditing = () => {
+    setCanvasScale(0.4); // Very small for element access
   };
 
   return (
@@ -128,9 +133,17 @@ const CanvasCreativeEditor = ({
         <div className="flex items-center space-x-2">
           {/* Scale Controls */}
           <button
+            onClick={shrinkForEditing}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
+            title="Shrink for editing (40%)"
+          >
+            <span className="text-xs font-mono">40%</span>
+          </button>
+          
+          <button
             onClick={fitToScreen}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
-            title="Fit to screen"
+            title="Fit to screen (60%)"
           >
             <ArrowsPointingInIcon className="w-4 h-4" />
           </button>
@@ -138,7 +151,7 @@ const CanvasCreativeEditor = ({
           <button
             onClick={resetScale}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
-            title="Reset scale"
+            title="Reset scale (100%)"
           >
             <ArrowsPointingOutIcon className="w-4 h-4" />
           </button>
@@ -172,25 +185,40 @@ const CanvasCreativeEditor = ({
       {/* Canvas Container */}
       <div className="canvas-container border border-gray-200 rounded-lg overflow-hidden bg-white">
         {viewMode === 'edit' && !readonly ? (
-          /* Edit Mode - Full Canvas Editor */
-          <div className="h-[600px]">
-            <CanvasEditor
-              adData={{
-                title: creative?.elements?.headline,
-                description: creative?.elements?.description
+          /* Edit Mode - Scalable Canvas Editor */
+          <div 
+            className="flex items-center justify-center p-4"
+            style={{ 
+              minHeight: '500px',
+              height: 'auto' // Allow dynamic height
+            }}
+          >
+            <div 
+              style={{
+                transform: `scale(${canvasScale})`,
+                transformOrigin: 'center',
+                width: format.width,
+                height: format.height
               }}
-              campaignSettings={{}}
-              initialAdSize={`${format.width}x${format.height}`}
-              canvasState={canvasData}
-              onCanvasStateChange={handleCanvasStateChange}
-              readonly={false}
-              viewportScale={canvasScale}
-              showScaleControls={false}
-              onScaleChange={setCanvasScale}
-              onFitToScreen={fitToScreen}
-              isResponsiveMode={false}
-              currentFormat={format}
-            />
+            >
+              <CanvasEditor
+                adData={{
+                  title: creative?.elements?.headline,
+                  description: creative?.elements?.description
+                }}
+                campaignSettings={{}}
+                initialAdSize={`${format.width}x${format.height}`}
+                canvasState={canvasData}
+                onCanvasStateChange={handleCanvasStateChange}
+                readonly={false}
+                viewportScale={1} // Set to 1 since we're handling scaling externally
+                showScaleControls={false}
+                onScaleChange={setCanvasScale}
+                onFitToScreen={fitToScreen}
+                isResponsiveMode={false}
+                currentFormat={format}
+              />
+            </div>
           </div>
         ) : (
           /* Preview Mode - Static Preview */
@@ -292,17 +320,23 @@ const CreativePreview = ({ creative, format, canvasState }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: element.styles.border || 'none',
-              borderRadius: element.styles.borderRadius || '6px',
-              backgroundColor: element.styles.backgroundColor || '#2b6cb0',
+              border: element.styles.border || '2px solid #1e40af',
+              borderRadius: element.styles.borderRadius || '8px',
+              backgroundColor: element.styles.backgroundColor || '#1e40af',
               color: element.styles.color || '#ffffff',
-              fontSize: element.styles.fontSize || '14px',
-              fontWeight: element.styles.fontWeight || 'bold',
+              fontSize: element.styles.fontSize || '16px',
+              fontWeight: element.styles.fontWeight || '700',
               fontFamily: element.styles.fontFamily || 'Inter, sans-serif',
               cursor: 'pointer',
               outline: 'none',
               textAlign: 'center',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2)',
+              padding: '12px 20px',
+              letterSpacing: '0.025em',
+              textTransform: 'uppercase',
+              transition: 'all 0.2s ease',
+              minHeight: '44px' // Ensure minimum touch target
             }}
             disabled
           >

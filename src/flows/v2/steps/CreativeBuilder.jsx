@@ -552,28 +552,32 @@ const CreativeBuilder = ({
       locked: false
     });
     
-    // CTA Button element (bottom)
-    const ctaWidth = Math.min(width * 0.4, 120);
-    const ctaHeight = Math.min(height * 0.08, 40);
+    // CTA Button element (bottom, larger and more prominent)
+    const ctaWidth = Math.min(width * 0.7, 200); // Wider button
+    const ctaHeight = Math.min(height * 0.12, 50); // Taller button
     elements.push({
       id: 'cta-button-1',
       type: 'button',
       content: content.cta,
       position: { 
         x: (width - ctaWidth) / 2, 
-        y: height - ctaHeight - spacing
+        y: height - ctaHeight - (spacing * 0.8) // Slightly higher positioning
       },
       size: { width: ctaWidth, height: ctaHeight },
       zIndex: 3,
       styles: {
         backgroundColor: getCtaColor(content.style),
         color: '#ffffff',
-        fontSize: getFontSize(width, 'button'),
-        fontWeight: 'bold',
-        border: 'none',
-        borderRadius: '6px',
+        fontSize: Math.max(14, width / 25) + 'px', // Better font sizing
+        fontWeight: '700',
+        border: `2px solid ${getCtaColor(content.style)}`,
+        borderRadius: '8px',
         cursor: 'pointer',
-        fontFamily: getStyleFont(content.style)
+        fontFamily: getStyleFont(content.style),
+        textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.025em'
       },
       interactive: true,
       locked: false
