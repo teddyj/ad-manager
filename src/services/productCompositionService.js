@@ -1,325 +1,328 @@
 /**
- * ProductCompositionService
- * Handles precise product placement and scaling within background scenes
+ * Product Composition Service
+ * Handles intelligent placement and composition of products within backgrounds
+ * Part of Phase 2: Enhanced Background System
  */
+
 export class ProductCompositionService {
-  
-  /**
-   * Create a composite image with scaled product and background
-   * @param {string} productImageUrl - URL of the product image
-   * @param {string} backgroundImageUrl - URL of the background image
-   * @param {Object} options - Composition options
-   * @returns {Promise<string>} - Composite image data URL
-   */
-  static async composeProductWithBackground(productImageUrl, backgroundImageUrl, options = {}) {
-    const {
-      productScale = 1.0,           // Scale factor for product (0.1 - 3.0)
-      productPositionX = 0.5,       // X position (0-1, 0.5 = center)
-      productPositionY = 0.5,       // Y position (0-1, 0.5 = center)
-      canvasWidth = 1024,           // Output canvas width
-      canvasHeight = 1024,          // Output canvas height
-      removeBackground = true,      // Whether to remove product background
-      quality = 0.9                 // Output quality
-    } = options;
-
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Load both images
-        const [productImg, backgroundImg] = await Promise.all([
-          this.loadImage(productImageUrl),
-          this.loadImage(backgroundImageUrl)
-        ]);
-
-        // Create canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-
-        // Draw background (scaled to fill canvas)
-        const bgScale = Math.max(canvasWidth / backgroundImg.width, canvasHeight / backgroundImg.height);
-        const bgWidth = backgroundImg.width * bgScale;
-        const bgHeight = backgroundImg.height * bgScale;
-        const bgX = (canvasWidth - bgWidth) / 2;
-        const bgY = (canvasHeight - bgHeight) / 2;
-        
-        ctx.drawImage(backgroundImg, bgX, bgY, bgWidth, bgHeight);
-
-        // Process product image (remove background if needed)
-        let processedProductImg = productImg;
-        if (removeBackground) {
-          processedProductImg = await this.removeBackground(productImg);
-        }
-
-        // Calculate product dimensions and position with more dramatic scaling
-        const baseProductSize = Math.min(canvasWidth, canvasHeight) * 0.5; // Base size 50% of canvas
-        const productRatio = processedProductImg.width / processedProductImg.height;
-        
-        let productWidth, productHeight;
-        if (productRatio > 1) {
-          // Landscape product
-          productWidth = baseProductSize * productScale;
-          productHeight = productWidth / productRatio;
-        } else {
-          // Portrait product
-          productHeight = baseProductSize * productScale;
-          productWidth = productHeight * productRatio;
-        }
-
-        console.log('Product composition details:', {
-          originalSize: `${processedProductImg.width}x${processedProductImg.height}`,
-          targetSize: `${productWidth}x${productHeight}`,
-          scale: productScale,
-          position: `${productPositionX}, ${productPositionY}`,
-          canvasSize: `${canvasWidth}x${canvasHeight}`
-        });
-
-        // Position product
-        const productX = (canvasWidth * productPositionX) - (productWidth / 2);
-        const productY = (canvasHeight * productPositionY) - (productHeight / 2);
-
-        // Draw product with shadow/depth effect
-        this.drawProductWithEffects(ctx, processedProductImg, productX, productY, productWidth, productHeight);
-
-        // Convert to data URL
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
-
-      } catch (error) {
-        reject(new Error(`Composition failed: ${error.message}`));
-      }
-    });
+  static isEnabled() {
+    // Check if composition features are available
+    return true; // For now, always enabled since this is client-side logic
   }
 
   /**
-   * Load an image from URL (with CORS handling)
-   * @private
+   * Analyze background and suggest optimal product placement
+   * @param {string} backgroundUrl - URL of the background image
+   * @param {Object} productDimensions - Product image dimensions
+   * @param {Object} canvasDimensions - Canvas dimensions
+   * @returns {Object} Suggested composition settings
    */
-  static async loadImage(imageUrl) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Convert to data URL to avoid CORS issues
-        const response = await fetch(imageUrl);
-        if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
-        
-        const blob = await response.blob();
-        const dataUrl = await new Promise((res, rej) => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result);
-          reader.onerror = () => rej(new Error('Failed to read blob'));
-          reader.readAsDataURL(blob);
-        });
-
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = dataUrl;
-        
-      } catch (error) {
-        reject(new Error(`Image loading failed: ${error.message}`));
-      }
-    });
-  }
-
-  /**
-   * Remove background from product image using edge detection and color similarity
-   * @private
-   */
-  static async removeBackground(productImg) {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = productImg.width;
-      canvas.height = productImg.height;
-
-      // Draw original image
-      ctx.drawImage(productImg, 0, 0);
-
-      // Get image data
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      const width = canvas.width;
-      const height = canvas.height;
-
-      // Sample corner pixels to determine background color
-      const corners = [
-        [0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]
-      ];
+  static async analyzeComposition(backgroundUrl, productDimensions, canvasDimensions) {
+    try {
+      // For now, implement rule-based composition logic
+      // In future, this could use AI/ML for more sophisticated analysis
       
-      let bgR = 0, bgG = 0, bgB = 0, cornerCount = 0;
-      
-      corners.forEach(([x, y]) => {
-        const idx = (y * width + x) * 4;
-        bgR += data[idx];
-        bgG += data[idx + 1];
-        bgB += data[idx + 2];
-        cornerCount++;
-      });
-      
-      bgR = Math.round(bgR / cornerCount);
-      bgG = Math.round(bgG / cornerCount);
-      bgB = Math.round(bgB / cornerCount);
-
-      // Remove background based on color similarity
-      const tolerance = 30; // Adjustable tolerance
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Calculate color distance from background
-        const distance = Math.sqrt(
-          Math.pow(r - bgR, 2) + 
-          Math.pow(g - bgG, 2) + 
-          Math.pow(b - bgB, 2)
-        );
-        
-        // If pixel is similar to background color, make it transparent
-        if (distance < tolerance) {
-          data[i + 3] = 0; // Set alpha to 0 (transparent)
-        }
-      }
-
-      // Apply flood fill from edges to catch any missed background areas
-      this.floodFillBackground(data, width, height, bgR, bgG, bgB, tolerance);
-
-      ctx.putImageData(imageData, 0, 0);
-
-      // Convert back to image
-      const processedImg = new Image();
-      processedImg.onload = () => resolve(processedImg);
-      processedImg.src = canvas.toDataURL();
-    });
-  }
-
-  /**
-   * Flood fill algorithm to remove background from edges
-   * @private
-   */
-  static floodFillBackground(data, width, height, bgR, bgG, bgB, tolerance) {
-    const visited = new Set();
-    const stack = [];
-    
-    // Add edge pixels to stack
-    for (let x = 0; x < width; x++) {
-      stack.push([x, 0]); // Top edge
-      stack.push([x, height - 1]); // Bottom edge
-    }
-    for (let y = 0; y < height; y++) {
-      stack.push([0, y]); // Left edge
-      stack.push([width - 1, y]); // Right edge
-    }
-    
-    while (stack.length > 0) {
-      const [x, y] = stack.pop();
-      const key = `${x},${y}`;
-      
-      if (visited.has(key) || x < 0 || x >= width || y < 0 || y >= height) {
-        continue;
-      }
-      
-      visited.add(key);
-      const idx = (y * width + x) * 4;
-      
-      // Skip if already transparent
-      if (data[idx + 3] === 0) continue;
-      
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      
-      // Calculate distance from background color
-      const distance = Math.sqrt(
-        Math.pow(r - bgR, 2) + 
-        Math.pow(g - bgG, 2) + 
-        Math.pow(b - bgB, 2)
+      const suggestions = this.generateCompositionSuggestions(
+        productDimensions, 
+        canvasDimensions
       );
       
-      if (distance < tolerance) {
-        // Make transparent
-        data[idx + 3] = 0;
-        
-        // Add neighboring pixels
-        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
-      }
+      return {
+        success: true,
+        suggestions,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error('Composition analysis error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 
   /**
-   * Draw product with realistic effects (shadow, lighting)
-   * @private
+   * Generate smart composition suggestions based on design principles
    */
-  static drawProductWithEffects(ctx, productImg, x, y, width, height) {
-    // Save context
-    ctx.save();
-
-    // Add subtle shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
-
-    // Draw product
-    ctx.drawImage(productImg, x, y, width, height);
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Restore context
-    ctx.restore();
+  static generateCompositionSuggestions(productDimensions, canvasDimensions) {
+    const { width: canvasWidth, height: canvasHeight } = canvasDimensions;
+    const { width: productWidth, height: productHeight } = productDimensions;
+    
+    // Rule of thirds positioning
+    const thirdWidth = canvasWidth / 3;
+    const thirdHeight = canvasHeight / 3;
+    
+    return {
+      // Primary suggestion: Right third, center vertical
+      primary: {
+        position: {
+          x: thirdWidth * 2 - (productWidth / 2),
+          y: (canvasHeight / 2) - (productHeight / 2)
+        },
+        scale: this.calculateOptimalScale(productDimensions, canvasDimensions),
+        reasoning: "Right third placement allows space for text on the left"
+      },
+      
+      // Alternative suggestions
+      alternatives: [
+        {
+          name: "Center Focus",
+          position: {
+            x: (canvasWidth / 2) - (productWidth / 2),
+            y: (canvasHeight / 2) - (productHeight / 2)
+          },
+          scale: this.calculateOptimalScale(productDimensions, canvasDimensions, 0.8),
+          reasoning: "Center placement for maximum product focus"
+        },
+        {
+          name: "Left Third", 
+          position: {
+            x: thirdWidth - (productWidth / 2),
+            y: (canvasHeight / 2) - (productHeight / 2)
+          },
+          scale: this.calculateOptimalScale(productDimensions, canvasDimensions),
+          reasoning: "Left placement with space for text on the right"
+        },
+        {
+          name: "Bottom Right",
+          position: {
+            x: canvasWidth - productWidth - 40,
+            y: canvasHeight - productHeight - 40
+          },
+          scale: this.calculateOptimalScale(productDimensions, canvasDimensions, 0.6),
+          reasoning: "Smaller product placement leaving space for content above"
+        }
+      ]
+    };
   }
 
   /**
-   * Generate different composition presets
+   * Calculate optimal scale for product within canvas
+   */
+  static calculateOptimalScale(productDimensions, canvasDimensions, targetRatio = 0.4) {
+    const { width: canvasWidth, height: canvasHeight } = canvasDimensions;
+    const { width: productWidth, height: productHeight } = productDimensions;
+    
+    // Target product to take up specified ratio of canvas
+    const targetProductWidth = canvasWidth * targetRatio;
+    const targetProductHeight = canvasHeight * targetRatio;
+    
+    // Calculate scale maintaining aspect ratio
+    const scaleX = targetProductWidth / productWidth;
+    const scaleY = targetProductHeight / productHeight;
+    
+    // Use smaller scale to ensure product fits within target dimensions
+    return Math.min(scaleX, scaleY, 1); // Don't scale up beyond original size
+  }
+
+  /**
+   * Generate shadow and lighting effects based on background analysis
+   */
+  static generateLightingEffects(backgroundContext = 'neutral') {
+    const effects = {
+      shadow: {
+        enabled: true,
+        blur: 10,
+        offset: { x: 0, y: 4 },
+        color: 'rgba(0, 0, 0, 0.2)'
+      },
+      highlight: {
+        enabled: false
+      }
+    };
+
+    // Adjust effects based on background context
+    switch (backgroundContext) {
+      case 'kitchen':
+      case 'indoor':
+        effects.shadow.blur = 8;
+        effects.shadow.color = 'rgba(0, 0, 0, 0.15)';
+        break;
+        
+      case 'outdoor':
+      case 'bright':
+        effects.shadow.blur = 12;
+        effects.shadow.offset = { x: 2, y: 6 };
+        effects.shadow.color = 'rgba(0, 0, 0, 0.3)';
+        effects.highlight.enabled = true;
+        effects.highlight.color = 'rgba(255, 255, 255, 0.1)';
+        break;
+        
+      case 'studio':
+      case 'minimal':
+        effects.shadow.blur = 6;
+        effects.shadow.color = 'rgba(0, 0, 0, 0.1)';
+        break;
+        
+      default:
+        // Keep default settings
+        break;
+    }
+
+    return effects;
+  }
+
+  /**
+   * Apply composition suggestions to a canvas element
+   */
+  static applyComposition(element, suggestion, effects = null) {
+    const updatedElement = {
+      ...element,
+      position: {
+        x: Math.round(suggestion.position.x),
+        y: Math.round(suggestion.position.y)
+      },
+      size: {
+        width: Math.round(element.size.width * suggestion.scale),
+        height: Math.round(element.size.height * suggestion.scale)
+      }
+    };
+
+    // Apply lighting effects if provided
+    if (effects) {
+      updatedElement.styles = {
+        ...updatedElement.styles,
+        ...(effects.shadow.enabled && {
+          boxShadow: `${effects.shadow.offset.x}px ${effects.shadow.offset.y}px ${effects.shadow.blur}px ${effects.shadow.color}`
+        })
+      };
+    }
+
+    return updatedElement;
+  }
+
+  /**
+   * Get composition presets for quick application
    */
   static getCompositionPresets() {
     return {
-      'table-small': {
-        productScale: 0.4,
-        productPositionX: 0.5,
-        productPositionY: 0.7,
-        description: 'Small product on table'
+      'hero-center': {
+        name: 'Hero Center',
+        description: 'Large centered product for maximum impact',
+        position: { x: '50%', y: '50%' },
+        scale: 0.6,
+        anchor: 'center'
       },
-      'table-medium': {
-        productScale: 0.6,
-        productPositionX: 0.5,
-        productPositionY: 0.65,
-        description: 'Medium product on table'
+      'rule-of-thirds-right': {
+        name: 'Rule of Thirds (Right)',
+        description: 'Product on right third with space for text',
+        position: { x: '66%', y: '50%' },
+        scale: 0.4,
+        anchor: 'center'
       },
-      'table-large': {
-        productScale: 0.8,
-        productPositionX: 0.5,
-        productPositionY: 0.6,
-        description: 'Large product on table'
+      'rule-of-thirds-left': {
+        name: 'Rule of Thirds (Left)', 
+        description: 'Product on left third with space for text',
+        position: { x: '33%', y: '50%' },
+        scale: 0.4,
+        anchor: 'center'
       },
-      'shelf-small': {
-        productScale: 0.3,
-        productPositionX: 0.3,
-        productPositionY: 0.4,
-        description: 'Small product on shelf'
+      'bottom-showcase': {
+        name: 'Bottom Showcase',
+        description: 'Product in lower portion with content above',
+        position: { x: '50%', y: '75%' },
+        scale: 0.35,
+        anchor: 'center'
       },
-      'shelf-medium': {
-        productScale: 0.5,
-        productPositionX: 0.4,
-        productPositionY: 0.45,
-        description: 'Medium product on shelf'
-      },
-      'hero-large': {
-        productScale: 1.0,
-        productPositionX: 0.5,
-        productPositionY: 0.5,
-        description: 'Hero product shot'
-      },
-      'lifestyle-small': {
-        productScale: 0.25,
-        productPositionX: 0.7,
-        productPositionY: 0.6,
-        description: 'Product in lifestyle scene'
+      'corner-accent': {
+        name: 'Corner Accent',
+        description: 'Small product accent in corner',
+        position: { x: '85%', y: '85%' },
+        scale: 0.25,
+        anchor: 'center'
       }
     };
+  }
+
+  /**
+   * Detect background context for intelligent effect application
+   */
+  static detectBackgroundContext(backgroundPrompt) {
+    const prompt = backgroundPrompt.toLowerCase();
+    
+    if (prompt.includes('kitchen') || prompt.includes('indoor') || prompt.includes('home')) {
+      return 'indoor';
+    } else if (prompt.includes('outdoor') || prompt.includes('patio') || prompt.includes('garden')) {
+      return 'outdoor';
+    } else if (prompt.includes('studio') || prompt.includes('minimal') || prompt.includes('clean')) {
+      return 'studio';
+    } else if (prompt.includes('bright') || prompt.includes('sunny') || prompt.includes('natural light')) {
+      return 'bright';
+    }
+    
+    return 'neutral';
+  }
+
+  /**
+   * Calculate safe zones for text placement given product position
+   */
+  static calculateTextSafeZones(productElement, canvasDimensions) {
+    const { position, size } = productElement;
+    const { width: canvasWidth, height: canvasHeight } = canvasDimensions;
+    
+    const productLeft = position.x;
+    const productRight = position.x + size.width;
+    const productTop = position.y;
+    const productBottom = position.y + size.height;
+    
+    const safeZones = [];
+    
+    // Left zone
+    if (productLeft > 100) {
+      safeZones.push({
+        name: 'left',
+        area: {
+          x: 20,
+          y: 20,
+          width: productLeft - 40,
+          height: canvasHeight - 40
+        },
+        recommended: 'headline-left'
+      });
+    }
+    
+    // Right zone
+    if (canvasWidth - productRight > 100) {
+      safeZones.push({
+        name: 'right',
+        area: {
+          x: productRight + 20,
+          y: 20,
+          width: canvasWidth - productRight - 40,
+          height: canvasHeight - 40
+        },
+        recommended: 'headline-right'
+      });
+    }
+    
+    // Top zone
+    if (productTop > 80) {
+      safeZones.push({
+        name: 'top',
+        area: {
+          x: 20,
+          y: 20,
+          width: canvasWidth - 40,
+          height: productTop - 40
+        },
+        recommended: 'headline-top'
+      });
+    }
+    
+    // Bottom zone
+    if (canvasHeight - productBottom > 80) {
+      safeZones.push({
+        name: 'bottom',
+        area: {
+          x: 20,
+          y: productBottom + 20,
+          width: canvasWidth - 40,
+          height: canvasHeight - productBottom - 40
+        },
+        recommended: 'description-bottom'
+      });
+    }
+    
+    return safeZones;
   }
 } 

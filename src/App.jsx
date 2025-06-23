@@ -5,6 +5,10 @@ import ResponsiveCanvas from './components/ResponsiveCanvas.jsx';
 import { loadSampleData } from './sample-data.js';
 import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
+// Feature flags and new flow imports
+import { isFeatureEnabled } from './config/features.js';
+import CampaignFlowV2 from './flows/v2/CampaignFlowV2.jsx';
+
 // Create AppContext for sharing app state
 const AppContext = createContext({
     appView: null,
@@ -121,6 +125,7 @@ const APP_VIEW_PRODUCT_DETAILS = 'product_details';
 const APP_VIEW_PRODUCT_FORM = 'product_form';
 const APP_VIEW_CAMPAIGN_MANAGER = 'campaign_manager';
 const APP_VIEW_CAMPAIGN_BUILDER = 'campaign_builder';
+const APP_VIEW_CAMPAIGN_FLOW_V2 = 'campaign_flow_v2'; // New V2 flow
 const APP_VIEW_CAMPAIGN_DETAILS = 'campaign_details';
 const APP_VIEW_AD_PLATFORMS = 'ad_platforms';
 const APP_VIEW_INSIGHTS = 'insights';
@@ -5430,8 +5435,13 @@ function App() {
 
     // Function to switch to Campaign Builder
     const handleCreateNewCampaign = () => {
-        setAppView(APP_VIEW_CAMPAIGN_BUILDER);
-        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
+        // Check if new campaign flow is enabled
+        if (isFeatureEnabled('NEW_CAMPAIGN_FLOW')) {
+            setAppView(APP_VIEW_CAMPAIGN_FLOW_V2);
+        } else {
+            setAppView(APP_VIEW_CAMPAIGN_BUILDER);
+            setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
+        }
         setAdData(null);
         setCampaignSettings(null);
     }
@@ -5514,10 +5524,29 @@ function App() {
 
     const handleCreateCampaignFromProduct = (product) => {
         setSelectedProduct(product);
-        setAppView(APP_VIEW_CAMPAIGN_BUILDER);
-        setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
+        // Check if new campaign flow is enabled
+        if (isFeatureEnabled('NEW_CAMPAIGN_FLOW')) {
+            setAppView(APP_VIEW_CAMPAIGN_FLOW_V2);
+        } else {
+            setAppView(APP_VIEW_CAMPAIGN_BUILDER);
+            setCurrentViewWithHistory(VIEW_CREATE_CAMPAIGN);
+        }
         setAdData(null);
         setCampaignSettings(null);
+    };
+
+    // V2 Campaign Flow handlers
+    const handleCampaignFlowV2Complete = (campaignData) => {
+        console.log('Campaign Flow V2 completed:', campaignData);
+        // Return to campaign manager after completion
+        setAppView(APP_VIEW_CAMPAIGN_MANAGER);
+        setSelectedProduct(null);
+    };
+
+    const handleCampaignFlowV2Cancel = () => {
+        // Return to campaign manager if cancelled
+        setAppView(APP_VIEW_CAMPAIGN_MANAGER);
+        setSelectedProduct(null);
     };
 
     // --- Render Logic ---
@@ -5599,6 +5628,7 @@ function App() {
                             appView === APP_VIEW_PRODUCT_DETAILS ? `${selectedProduct?.name || 'Product Details'}` :
                             appView === APP_VIEW_PRODUCT_FORM ? (selectedProduct ? `Edit ${selectedProduct.name}` : 'Add New Product') :
                             appView === APP_VIEW_CAMPAIGN_MANAGER ? 'Campaign Manager' : 
+                            appView === APP_VIEW_CAMPAIGN_FLOW_V2 ? 'Campaign Builder (Enhanced)' :
                             appView === APP_VIEW_CAMPAIGN_DETAILS ? `${selectedCampaign?.name || 'Campaign Details'}` :
                             appView === APP_VIEW_AD_PLATFORMS ? 'Platform Integrations' :
                             appView === APP_VIEW_INSIGHTS ? 'Market Insights' :
@@ -5663,6 +5693,13 @@ function App() {
                             <LocatorsView />
                         ) : appView === APP_VIEW_ACCOUNT ? (
                             <AccountView dbOperations={dbOperations} />
+                        ) : appView === APP_VIEW_CAMPAIGN_FLOW_V2 ? (
+                            <CampaignFlowV2
+                                onComplete={handleCampaignFlowV2Complete}
+                                onCancel={handleCampaignFlowV2Cancel}
+                                initialData={selectedProduct ? { product: selectedProduct } : {}}
+                                dbOperations={dbOperations}
+                            />
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (

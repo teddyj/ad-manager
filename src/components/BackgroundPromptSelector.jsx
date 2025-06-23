@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { BACKGROUND_PROMPTS } from '../constants/backgroundPrompts.js';
+import { 
+  BACKGROUND_ENVIRONMENTS, 
+  getBackgroundCategories, 
+  getBackgroundsByCategory 
+} from '../constants/backgroundPrompts.js';
 
 /**
  * BackgroundPromptSelector Component
  * Displays categorized background prompts for users to select from
+ * Enhanced for Phase 2 with new environment categories
  */
-function BackgroundPromptSelector({ onPromptSelect, onCustomPrompt, isLoading = false }) {
-  const [selectedCategory, setSelectedCategory] = useState('Lifestyle');
+const BackgroundPromptSelector = React.memo(function BackgroundPromptSelector({ onPromptSelect, onCustomPrompt, isLoading = false }) {
+  const [selectedCategory, setSelectedCategory] = useState('LIFESTYLE');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
 
-  const selectedCategoryData = BACKGROUND_PROMPTS.find(cat => cat.category === selectedCategory);
+  const categories = getBackgroundCategories();
+  const selectedCategoryData = getBackgroundsByCategory(selectedCategory);
 
   const handlePromptClick = (prompt) => {
     if (!isLoading) {
@@ -83,44 +89,42 @@ function BackgroundPromptSelector({ onPromptSelect, onCustomPrompt, isLoading = 
         <>
           {/* Category tabs */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {BACKGROUND_PROMPTS.map((category) => (
+            {categories.map((category) => (
               <button
-                key={category.category}
-                onClick={() => setSelectedCategory(category.category)}
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
                 disabled={isLoading}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  selectedCategory === category.category
+                  selectedCategory === category.id
                     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                 } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {category.category}
+                {category.name} ({category.count})
               </button>
             ))}
           </div>
 
           {/* Prompt grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {selectedCategoryData?.prompts.map((prompt, index) => (
+            {selectedCategoryData.map((prompt) => (
               <button
-                key={index}
+                key={prompt.id}
                 onClick={() => handlePromptClick(prompt)}
                 disabled={isLoading}
                 className={`text-left p-4 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl flex-shrink-0" role="img" aria-label={prompt.description}>
-                    {prompt.icon}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-300 mb-1">
-                      {prompt.description}
+                <div className="space-y-2">
+                  <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                    {prompt.name}
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                      {prompt.prompt}
+                    {prompt.description}
                     </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1">
+                    "{prompt.prompt.substring(0, 80)}..."
                   </div>
                 </div>
               </button>
@@ -140,6 +144,6 @@ function BackgroundPromptSelector({ onPromptSelect, onCustomPrompt, isLoading = 
       )}
     </div>
   );
-}
+});
 
 export default BackgroundPromptSelector; 

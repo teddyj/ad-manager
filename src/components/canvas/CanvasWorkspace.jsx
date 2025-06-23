@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useState } from 'react';
 import ElementRenderer from './ElementRenderer.jsx';
+import { createAssetElement } from '../../constants/assetLibrary.js';
 
 /**
  * CanvasWorkspace - The main design surface for drag-and-drop element manipulation
@@ -9,7 +10,9 @@ function CanvasWorkspace({
   canvasDimensions,
   selectedElementId,
   onElementSelect,
-  onElementUpdate
+  onElementUpdate,
+  onElementAdd,
+  readonly = false
 }) {
   const canvasRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -18,16 +21,39 @@ function CanvasWorkspace({
 
   // Handle mouse down on canvas elements
   const handleMouseDown = useCallback((e, elementId) => {
+    if (readonly) return;
+    
     e.preventDefault();
     e.stopPropagation();
     
-    const element = canvasState.elements.find(el => el.id === elementId);
-    if (!element || element.locked) return;
+    console.log('🖱️ Mouse down on element:', elementId);
+    const element = canvasState?.elements?.find(el => el.id === elementId);
+    
+    if (!element) {
+      console.warn('❌ Element not found for drag:', elementId);
+      return;
+    }
+    
+    if (element.locked) {
+      console.warn('🔒 Element is locked:', elementId);
+      return;
+    }
+    
+    console.log('✅ Starting drag for element:', {
+      id: elementId,
+      type: element.type,
+      position: element.position
+    });
 
     // Select the element
     onElementSelect(elementId);
 
     // Start dragging
+    if (!canvasRef.current) {
+      console.warn('Canvas ref is null during mouse down');
+      return;
+    }
+    
     const rect = canvasRef.current.getBoundingClientRect();
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -41,59 +67,101 @@ function CanvasWorkspace({
       x: canvasX - element.position.x,
       y: canvasY - element.position.y
     });
-  }, [canvasState.elements, onElementSelect]);
+  }, [canvasState?.elements, onElementSelect, readonly]);
 
-  // Handle mouse move for dragging
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !selectedElementId) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    
-    const canvasX = clientX - rect.left;
-    const canvasY = clientY - rect.top;
-
-    // Calculate new position
-    const newX = Math.max(0, Math.min(canvasX - dragOffset.x, canvasDimensions.width - 50));
-    const newY = Math.max(0, Math.min(canvasY - dragOffset.y, canvasDimensions.height - 20));
-
-    // Update element position
-    onElementUpdate(selectedElementId, {
-      position: { x: newX, y: newY }
-    });
-  }, [isDragging, selectedElementId, dragOffset, canvasDimensions, onElementUpdate]);
-
-  // Handle mouse up to stop dragging
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    setDragStart({ x: 0, y: 0 });
-    setDragOffset({ x: 0, y: 0 });
-  }, []);
 
   // Handle clicking on empty canvas area
   const handleCanvasClick = useCallback((e) => {
+    if (readonly) return;
+    
     if (e.target === canvasRef.current) {
       onElementSelect(null); // Deselect all elements
     }
-  }, [onElementSelect]);
+  }, [onElementSelect, readonly]);
+
+  // Handle drag over for asset drop
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  // Handle asset drop
+  const handleDrop = useCallback((e) => {
+    if (readonly) return;
+    
+    e.preventDefault();
+    
+    try {
+      const assetData = e.dataTransfer.getData('application/json');
+      if (assetData) {
+        const asset = JSON.parse(assetData);
+        
+        // Calculate drop position relative to canvas
+        if (!canvasRef.current) {
+          console.warn('Canvas ref is null during drop');
+          return;
+        }
+        
+        const rect = canvasRef.current.getBoundingClientRect();
+        const dropX = Math.max(0, Math.min(e.clientX - rect.left - 30, canvasDimensions.width - 60));
+        const dropY = Math.max(0, Math.min(e.clientY - rect.top - 30, canvasDimensions.height - 60));
+        
+        // Create element from asset
+        const element = createAssetElement(asset, { x: dropX, y: dropY });
+        
+        // Add to canvas using onElementAdd
+        if (onElementAdd) {
+          onElementAdd('custom', { x: dropX, y: dropY }, null, element);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling asset drop:', error);
+    }
+  }, [canvasDimensions, onElementAdd, readonly]);
 
   // Add global mouse event listeners
   React.useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleMouseMove);
-      document.addEventListener('touchend', handleMouseUp);
+    if (!isDragging) return;
 
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('touchmove', handleMouseMove);
-        document.removeEventListener('touchend', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+    const handleGlobalMouseMove = (e) => {
+      if (!selectedElementId || !canvasRef.current) return;
+      
+      const rect = canvasRef.current.getBoundingClientRect();
+      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      
+      const canvasX = clientX - rect.left;
+      const canvasY = clientY - rect.top;
+
+      // Calculate new position
+      const newX = Math.max(0, Math.min(canvasX - dragOffset.x, canvasDimensions.width - 50));
+      const newY = Math.max(0, Math.min(canvasY - dragOffset.y, canvasDimensions.height - 20));
+
+      // Update element position
+      onElementUpdate(selectedElementId, {
+        position: { x: newX, y: newY }
+      });
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      setDragStart({ x: 0, y: 0 });
+      setDragOffset({ x: 0, y: 0 });
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    document.addEventListener('touchmove', handleGlobalMouseMove);
+    document.addEventListener('touchend', handleGlobalMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('touchmove', handleGlobalMouseMove);
+      document.removeEventListener('touchend', handleGlobalMouseUp);
+    };
+  }, [isDragging, selectedElementId, dragOffset, canvasDimensions, onElementUpdate]);
 
   return (
     <div className="relative">
@@ -108,9 +176,11 @@ function CanvasWorkspace({
           minHeight: `${canvasDimensions.height}px`
         }}
         onClick={handleCanvasClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         {/* Background Image */}
-        {canvasState.meta.backgroundImage && (
+        {canvasState?.meta?.backgroundImage && (
           <img
             src={canvasState.meta.backgroundImage}
             alt="Background"
@@ -134,23 +204,96 @@ function CanvasWorkspace({
         />
 
         {/* Render All Elements */}
-        {canvasState.elements
-          .sort((a, b) => a.zIndex - b.zIndex) // Sort by z-index
-          .map(element => (
-            <ElementRenderer
-              key={element.id}
-              element={element}
-              isSelected={element.id === selectedElementId}
-              onMouseDown={(e) => handleMouseDown(e, element.id)}
-              onDoubleClick={() => {
-                // Handle double-click for inline editing
-                if (element.type === 'text') {
-                  // TODO: Implement inline text editing
-                  console.log('Double-clicked text element:', element.id);
-                }
-              }}
-            />
-          ))}
+        {(canvasState?.elements || [])
+          .filter(element => {
+            // More thorough element validation with better debugging
+            if (!element || typeof element !== 'object') {
+              console.warn('❌ Invalid element (not object):', element);
+              return false;
+            }
+            if (!element.id || typeof element.id !== 'string') {
+              console.warn('❌ Invalid element.id (not string):', {
+                id: element.id,
+                idType: typeof element.id,
+                element: element
+              });
+              return false;
+            }
+            if (!element.type || typeof element.type !== 'string') {
+              console.warn('❌ Invalid element.type (not string):', {
+                type: element.type,
+                typeType: typeof element.type,
+                element: element
+              });
+              return false;
+            }
+            
+            // Additional validation for common issues
+            if (element.id.includes('[object Object]')) {
+              console.warn('❌ Element ID contains object reference:', element.id);
+              return false;
+            }
+            
+            // Debug position/size issues with more defensive checks
+            if (!element.position || typeof element.position !== 'object' || 
+                typeof element.position.x !== 'number' || typeof element.position.y !== 'number') {
+              console.warn('❌ Invalid element.position for element:', element.id, {
+                position: JSON.stringify(element.position),
+                positionType: typeof element.position,
+                hasX: element.position?.x,
+                hasY: element.position?.y,
+                xType: typeof element.position?.x,
+                yType: typeof element.position?.y,
+                xValue: element.position?.x,
+                yValue: element.position?.y
+              });
+              return false;
+            }
+            
+            if (!element.size || typeof element.size !== 'object' ||
+                typeof element.size.width !== 'number' || typeof element.size.height !== 'number') {
+              console.warn('❌ Invalid element.size:', {
+                id: element.id,
+                size: element.size,
+                sizeType: typeof element.size,
+                hasWidth: element.size?.width,
+                hasHeight: element.size?.height,
+                widthType: typeof element.size?.width,
+                heightType: typeof element.size?.height
+              });
+              return false;
+            }
+            
+            console.log('✅ Valid element:', {
+              id: element.id,
+              type: element.type,
+              position: JSON.stringify(element.position),
+              size: JSON.stringify(element.size),
+              content: element.content ? 'HAS_CONTENT' : 'NO_CONTENT'
+            });
+            
+            return true;
+          })
+          .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index with fallback
+          .map((element, index) => {
+            // Ensure element.id is a string
+            const elementId = String(element.id);
+            return (
+              <ElementRenderer
+                key={`element-${elementId}`}
+                element={element}
+                isSelected={elementId === selectedElementId}
+                onMouseDown={(e) => handleMouseDown(e, elementId)}
+                onDoubleClick={() => {
+                  // Handle double-click for inline editing
+                  if (element.type === 'text') {
+                    console.log('Double-clicked text element:', elementId);
+                  }
+                }}
+                onElementUpdate={onElementUpdate}
+              />
+            );
+          })}
 
         {/* Canvas Info */}
         <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none">
@@ -160,7 +303,7 @@ function CanvasWorkspace({
 
       {/* Canvas Scale Info */}
       <div className="absolute -bottom-6 left-0 text-xs text-gray-500">
-        Ad Size: {canvasState.meta.adSize}
+        Ad Size: {canvasState?.meta?.adSize || 'Unknown'}
       </div>
     </div>
   );

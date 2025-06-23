@@ -15,10 +15,18 @@ export class BackgroundService {
    */
   static init() {
     if (typeof window !== 'undefined' && import.meta.env.VITE_FAL_API_KEY) {
+      const apiKey = import.meta.env.VITE_FAL_API_KEY;
+      console.log('🔧 Background Service: Initializing with API key:', apiKey ? `${apiKey.slice(0, 8)}...` : 'missing');
+      
       fal.config({
-        credentials: import.meta.env.VITE_FAL_API_KEY
+        credentials: apiKey
       });
       this.isConfigured = true;
+      
+      // Development warning about credentials exposure
+      if (import.meta.env.DEV) {
+        console.info('🔧 Background Service: Running in development mode. fal credentials are exposed in browser environment. This is normal for development but should not be used in production.');
+      }
     } else {
       console.warn('Background Service: FAL_API_KEY not configured');
     }
@@ -103,7 +111,7 @@ export class BackgroundService {
         }
       }
 
-      // Prepare API parameters
+      // Prepare API parameters with validation
       const apiParams = {
         image_url: imageUrl,
         prompt: enhancedPrompt,
@@ -111,8 +119,26 @@ export class BackgroundService {
         ...options
       };
 
+      // Validate required parameters
+      if (!apiParams.image_url) {
+        throw new Error('image_url is required');
+      }
+      if (!apiParams.prompt || apiParams.prompt.trim().length === 0) {
+        throw new Error('prompt is required and cannot be empty');
+      }
+
+      // Validate image URL format
+      try {
+        new URL(apiParams.image_url);
+      } catch (e) {
+        throw new Error('image_url must be a valid URL');
+      }
+
+      // Use apiParams directly - let the API handle validation
+      const cleanParams = apiParams;
+
       // Make the API call with retry logic
-      const result = await this.makeApiCallWithRetry(apiParams, requestId);
+      const result = await this.makeApiCallWithRetry(cleanParams, requestId);
 
       // Update request status
       this.requestQueue.set(requestId, {
@@ -123,6 +149,8 @@ export class BackgroundService {
       });
 
       console.log('Background change completed:', result);
+      console.log('First image details:', result.images?.[0]);
+      console.log('Extracted imageUrl:', result.images?.[0]?.url);
 
       return {
         success: true,
@@ -158,6 +186,19 @@ export class BackgroundService {
    */
   static async makeApiCallWithRetry(params, requestId, attempt = 1) {
     try {
+      console.log('Making fal.ai API call with parameters:', {
+        endpoint: "fal-ai/image-editing/background-change",
+        paramCount: Object.keys(params).length,
+        paramKeys: Object.keys(params),
+        hasImageUrl: !!params.image_url,
+        hasPrompt: !!params.prompt,
+        promptLength: params.prompt ? params.prompt.length : 0,
+        promptValue: params.prompt,
+        imageUrlValid: params.image_url ? params.image_url.startsWith('https://') : false,
+        otherParams: Object.keys(params).filter(k => !['image_url', 'prompt'].includes(k)),
+        allParams: params
+      });
+
       const result = await fal.subscribe("fal-ai/image-editing/background-change", {
         input: params,
         logs: true,
@@ -179,6 +220,18 @@ export class BackgroundService {
       return result.data;
       
     } catch (error) {
+      // Enhanced error logging for validation errors
+      if (error.message?.includes('422') || error.message?.toLowerCase().includes('validation')) {
+        console.error('API Validation Error Details:', {
+          errorName: error.name,
+          errorMessage: error.message,
+          errorStatus: error.status,
+          errorBody: error.body,
+          params: params,
+          hint: 'Check if all required parameters are provided and have valid values'
+        });
+      }
+
       if (attempt < this.maxRetries && this.isRetryableError(error)) {
         console.warn(`API call failed (attempt ${attempt}/${this.maxRetries}), retrying...`, error.message);
         
