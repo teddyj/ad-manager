@@ -518,7 +518,7 @@ const CreativeBuilder = ({
     const imageX = (width - imageSize) / 2;
     
     // Always add image element - use placeholder if no product image
-    const imageContent = content.productImage || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"%3E%3Crect width="200" height="200" fill="%23f3f4f6"/%3E%3Ctext x="100" y="100" text-anchor="middle" dy="0.35em" fill="%23d1d5db" font-family="Arial, sans-serif" font-size="14"%3EProduct Image%3C/text%3E%3C/svg%3E';
+    const imageContent = content.productImage || null; // Use null for no image to show placeholder in preview
     
     console.log('🎨 Adding product image element:', {
       productImage: content.productImage,

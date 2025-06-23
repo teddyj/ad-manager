@@ -287,8 +287,23 @@ const CreativePreview = ({ creative, format, canvasState }) => {
         return (
           <button
             key={element.id}
-            style={commonStyles}
-            className="flex items-center justify-center"
+            style={{
+              ...commonStyles,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: element.styles.border || 'none',
+              borderRadius: element.styles.borderRadius || '6px',
+              backgroundColor: element.styles.backgroundColor || '#2b6cb0',
+              color: element.styles.color || '#ffffff',
+              fontSize: element.styles.fontSize || '14px',
+              fontWeight: element.styles.fontWeight || 'bold',
+              fontFamily: element.styles.fontFamily || 'Inter, sans-serif',
+              cursor: 'pointer',
+              outline: 'none',
+              textAlign: 'center',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}
             disabled
           >
             {element.content}
@@ -301,12 +316,29 @@ const CreativePreview = ({ creative, format, canvasState }) => {
             key={element.id}
             style={{
               ...commonStyles,
-              backgroundImage: `url(${element.content})`,
-              backgroundSize: 'cover',
+              backgroundImage: element.content ? `url(${element.content})` : 'none',
+              backgroundSize: element.styles.objectFit || 'cover',
               backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
+              backgroundRepeat: 'no-repeat',
+              borderRadius: element.styles.borderRadius || '8px',
+              boxShadow: element.styles.boxShadow || '0 4px 12px rgba(0,0,0,0.1)',
+              border: element.content ? 'none' : '2px dashed #d1d5db',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
-          />
+          >
+            {!element.content && (
+              <span style={{ 
+                color: '#9ca3af', 
+                fontSize: '12px', 
+                textAlign: 'center',
+                fontFamily: 'Inter, sans-serif'
+              }}>
+                Product Image
+              </span>
+            )}
+          </div>
         );
       
       default:
@@ -318,16 +350,31 @@ const CreativePreview = ({ creative, format, canvasState }) => {
     }
   };
 
+  // Use canvasState.elements if available, otherwise fall back to creative.canvasState
+  const elements = canvasState?.elements || creative?.canvasState?.elements || [];
+  const backgroundColor = canvasState?.meta?.backgroundColor || creative?.canvasState?.meta?.backgroundColor || creative?.elements?.backgroundColor || '#ffffff';
+
+  console.log('🎨 CreativePreview rendering:', {
+    elementsCount: elements.length,
+    backgroundColor: backgroundColor,
+    formatSize: `${format.width}x${format.height}`,
+    elements: elements.map(el => ({ 
+      id: el.id, 
+      type: el.type, 
+      content: el.type === 'image' ? (el.content ? 'Has image' : 'No image') : el.content 
+    }))
+  });
+
   return (
     <div 
-      className="relative"
+      className="relative overflow-hidden"
       style={{
         width: format.width,
         height: format.height,
-        backgroundColor: canvasState.meta?.backgroundColor || '#ffffff'
+        backgroundColor: backgroundColor
       }}
     >
-      {canvasState.elements?.map(renderElement)}
+      {elements.map(renderElement)}
     </div>
   );
 };
