@@ -3112,12 +3112,39 @@ function CampaignManagerView({ onCreateNew, onCampaignClick, dbOperations }) {
     // Get campaigns from storage
     const [campaigns, setCampaigns] = useState([]);
 
-    useEffect(() => {
-        // Load campaigns when component mounts
+    const loadCampaigns = () => {
         if (dbOperations) {
             const loadedCampaigns = dbOperations.getCampaigns();
             setCampaigns(loadedCampaigns);
         }
+    };
+
+    useEffect(() => {
+        // Load campaigns when component mounts
+        loadCampaigns();
+    }, [dbOperations]);
+
+    // Listen for storage changes to refresh campaigns
+    useEffect(() => {
+        const handleStorageChange = (e) => {
+            if (e.key === 'saved_campaigns' || e.key === 'campaigns') {
+                loadCampaigns();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        
+        // Also listen for focus event to refresh when returning to tab
+        const handleFocus = () => {
+            loadCampaigns();
+        };
+        
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, [dbOperations]);
 
     return (
@@ -3140,6 +3167,17 @@ function CampaignManagerView({ onCreateNew, onCampaignClick, dbOperations }) {
                     <div className="flex justify-between items-center">
                         <h2 className="text-lg font-semibold text-[#0B2265] dark:text-gray-200">My Campaigns</h2>
                         <div className="flex items-center space-x-2">
+                            <Button 
+                                variant="light" 
+                                size="small" 
+                                onClick={loadCampaigns}
+                                className="dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600"
+                                title="Refresh campaigns"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </Button>
                             <Button variant="light" size="small" className="dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
@@ -3179,12 +3217,19 @@ function CampaignManagerView({ onCreateNew, onCampaignClick, dbOperations }) {
                                 <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{campaign.id}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <button 
-                                            onClick={() => onCampaignClick(campaign)}
-                                            className="text-sm bg-transparent text-blue-500 hover:text-blue-700 hover:underline focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
-                                        >
-                                            {campaign.name}
-                                        </button>
+                                        <div className="flex items-center space-x-2">
+                                            <button 
+                                                onClick={() => onCampaignClick(campaign)}
+                                                className="text-sm bg-transparent text-blue-500 hover:text-blue-700 hover:underline focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
+                                            >
+                                                {campaign.name}
+                                            </button>
+                                            {campaign.source === 'v2' && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                    V2
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
@@ -4984,7 +5029,30 @@ function App() {
 
         getCampaigns: () => {
             try {
-                return JSON.parse(localStorage.getItem('campaigns') || '[]');
+                // Get campaigns from legacy campaign builder
+                const legacyCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                
+                // Get campaigns from V2 flow (saved campaigns)
+                const v2Campaigns = JSON.parse(localStorage.getItem('saved_campaigns') || '[]');
+                
+                // Transform V2 campaigns to match legacy format
+                const transformedV2Campaigns = v2Campaigns.map(campaign => ({
+                    id: campaign.id,
+                    productId: campaign.data?.product?.id || null,
+                    name: campaign.name,
+                    status: campaign.status === 'draft' ? 'Draft' : campaign.status === 'active' ? 'Active' : campaign.status,
+                    info: true,
+                    created: new Date(campaign.createdAt).toLocaleDateString(),
+                    type: campaign.data?.creative?.selectedFormats?.includes('video') ? 'Video Campaign' : 'Display Campaign',
+                    budget: '$0.00', // Default for now, could be enhanced
+                    starts: campaign.launchedAt ? new Date(campaign.launchedAt).toLocaleDateString() : 'Not Set',
+                    ends: 'Not Set',
+                    adData: campaign.data,
+                    source: 'v2' // Mark as V2 campaign for identification
+                }));
+                
+                // Combine and return both legacy and V2 campaigns
+                return [...legacyCampaigns, ...transformedV2Campaigns];
             } catch (error) {
                 console.error('Error getting campaigns:', error);
                 return [];
