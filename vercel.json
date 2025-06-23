@@ -1,9 +1,5 @@
 {
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "@vercel/node@3.0.7"
-    }
-  },
+
   "headers": [
     {
       "source": "/(.*)",
@@ -65,7 +61,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "nodeVersion": "18.x",
+
   "regions": ["sfo1"],
   "env": {
     "VITE_NEW_CAMPAIGN_FLOW": "true",
