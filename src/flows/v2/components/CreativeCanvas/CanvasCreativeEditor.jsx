@@ -358,12 +358,27 @@ const CreativePreview = ({ creative, format, canvasState }) => {
     elementsCount: elements.length,
     backgroundColor: backgroundColor,
     formatSize: `${format.width}x${format.height}`,
+    canvasStateProvided: !!canvasState,
+    creativeCanvasStateProvided: !!creative?.canvasState,
     elements: elements.map(el => ({ 
       id: el.id, 
       type: el.type, 
-      content: el.type === 'image' ? (el.content ? 'Has image' : 'No image') : el.content 
+      content: el.type === 'image' ? (el.content || 'No image URL') : (el.content ? 'Has content' : 'No content'),
+      imageUrl: el.type === 'image' ? el.content : undefined
     }))
   });
+  
+  // Debug image elements specifically
+  const imageElements = elements.filter(el => el.type === 'image');
+  if (imageElements.length > 0) {
+    console.log('🖼️ Image elements found:', imageElements.map(img => ({
+      id: img.id,
+      content: img.content,
+      hasContent: !!img.content,
+      position: img.position,
+      size: img.size
+    })));
+  }
 
   return (
     <div 

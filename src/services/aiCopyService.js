@@ -48,7 +48,7 @@ const PLATFORM_SPECS = {
 const copyCache = new Map();
 
 // Generate cache key for content
-const generateCacheKey = (type, productData, audienceData, platformData, settings) => {
+const generateCacheKey = (type, productData, audienceData, platformData, settings, variationIndex = 0) => {
   const key = JSON.stringify({
     type,
     product: {
@@ -66,13 +66,15 @@ const generateCacheKey = (type, productData, audienceData, platformData, setting
     settings: {
       creativity: settings?.creativity,
       tone: settings?.tone
-    }
+    },
+    variation: variationIndex, // Add variation index to ensure unique cache keys
+    timestamp: Math.floor(Date.now() / (1000 * 60 * 10)) // Cache expires every 10 minutes for freshness
   });
   return btoa(key); // Base64 encode for clean cache keys
 };
 
 // Build context-aware prompt for OpenAI
-const buildPrompt = (type, productData, audienceData, platformData, settings) => {
+const buildPrompt = (type, productData, audienceData, platformData, settings, variationIndex = 0) => {
   const specs = PLATFORM_SPECS[platformData?.platform] || PLATFORM_SPECS.default;
   const limit = specs[type]?.maxLength || 40;
   const tone = settings?.tone || specs[type]?.tone || 'engaging';
@@ -91,12 +93,23 @@ const buildPrompt = (type, productData, audienceData, platformData, settings) =>
   
   const brandedName = brand ? `${brand} ${productName}` : productName;
   
+  // Variation-specific prompt modifiers
+  const variationStyles = [
+    { approach: 'benefit-focused', emphasis: 'highlighting key benefits and value propositions' },
+    { approach: 'emotion-driven', emphasis: 'creating emotional connection and desire' },
+    { approach: 'urgency-based', emphasis: 'incorporating urgency and scarcity elements' }
+  ];
+  
+  const currentVariation = variationStyles[variationIndex] || variationStyles[0];
+  
   let basePrompt = '';
   
   if (type === 'headline') {
-    basePrompt = `Generate 3 compelling ${tone} headlines for ${platform} ads promoting "${brandedName}".`;
+    basePrompt = `Generate 3 unique ${tone} headlines for ${platform} ads promoting "${brandedName}". 
+Focus on a ${currentVariation.approach} approach, ${currentVariation.emphasis}.`;
   } else if (type === 'description') {
-    basePrompt = `Generate 3 persuasive ${tone} descriptions for ${platform} ads promoting "${brandedName}".`;
+    basePrompt = `Generate 3 unique ${tone} descriptions for ${platform} ads promoting "${brandedName}". 
+Focus on a ${currentVariation.approach} approach, ${currentVariation.emphasis}.`;
   }
   
   basePrompt += `\n\nContext:`;
@@ -111,13 +124,15 @@ const buildPrompt = (type, productData, audienceData, platformData, settings) =>
   
   basePrompt += `\n- Platform: ${platform}`;
   basePrompt += `\n- Campaign Goal: ${objective}`;
+  basePrompt += `\n- Variation Style: ${currentVariation.approach}`;
   
   basePrompt += `\n\nRequirements:`;
   basePrompt += `\n- Each ${type} must be under ${limit} characters`;
   basePrompt += `\n- Tone: ${tone}`;
   basePrompt += `\n- Focus on product benefits and value`;
   basePrompt += `\n- Avoid generic marketing language`;
-  basePrompt += `\n- Make them unique and engaging`;
+  basePrompt += `\n- Make them DISTINCTLY DIFFERENT from each other`;
+  basePrompt += `\n- Use ${currentVariation.approach} approach consistently`;
   
   if (settings?.creativity === 'high') {
     basePrompt += `\n- Be creative and bold with language`;
@@ -132,18 +147,27 @@ const buildPrompt = (type, productData, audienceData, platformData, settings) =>
     }
   }
   
+  // Add variation-specific instructions
+  if (variationIndex === 0) {
+    basePrompt += `\n- Emphasize practical benefits and clear value`;
+  } else if (variationIndex === 1) {
+    basePrompt += `\n- Focus on emotional appeal and lifestyle benefits`;
+  } else if (variationIndex === 2) {
+    basePrompt += `\n- Include urgency, exclusivity, or limited-time elements`;
+  }
+  
   basePrompt += `\n\nReturn exactly 3 options, one per line, no numbering or bullets.`;
   
   return basePrompt;
 };
 
 // Generate AI-powered headlines
-export const generateAIHeadlines = async (productData, audienceData, platformData, settings = {}) => {
+export const generateAIHeadlines = async (productData, audienceData, platformData, settings = {}, variationIndex = 0) => {
   try {
     // Check cache first
-    const cacheKey = generateCacheKey('headline', productData, audienceData, platformData, settings);
+    const cacheKey = generateCacheKey('headline', productData, audienceData, platformData, settings, variationIndex);
     if (copyCache.has(cacheKey)) {
-      console.log('📋 Using cached headlines');
+      console.log(`📋 Using cached headlines for variation ${variationIndex}`);
       return copyCache.get(cacheKey);
     }
     
@@ -154,10 +178,14 @@ export const generateAIHeadlines = async (productData, audienceData, platformDat
     }
     
     // Build prompt
-    const prompt = buildPrompt('headline', productData, audienceData, platformData, settings);
+    const prompt = buildPrompt('headline', productData, audienceData, platformData, settings, variationIndex);
     
-    console.log('🤖 Generating AI headlines...');
+    console.log(`🤖 Generating AI headlines for variation ${variationIndex}...`);
     console.log('📝 Prompt:', prompt.substring(0, 200) + '...');
+    
+    // Vary temperature based on variation to ensure different outputs
+    const baseTemp = settings?.creativity === 'high' ? 0.9 : settings?.creativity === 'low' ? 0.3 : 0.7;
+    const variationTemp = Math.min(1.0, baseTemp + (variationIndex * 0.1)); // Increase temperature for later variations
     
     // Call OpenAI API
     const response = await client.chat.completions.create({
@@ -165,7 +193,7 @@ export const generateAIHeadlines = async (productData, audienceData, platformDat
       messages: [
         {
           role: 'system',
-          content: 'You are an expert copywriter specializing in digital advertising. Create compelling, conversion-focused ad copy that resonates with target audiences.'
+          content: 'You are an expert copywriter specializing in digital advertising. Create compelling, conversion-focused ad copy that resonates with target audiences. Each request should produce unique, distinctly different variations.'
         },
         {
           role: 'user',
@@ -173,7 +201,9 @@ export const generateAIHeadlines = async (productData, audienceData, platformDat
         }
       ],
       max_tokens: 150,
-      temperature: settings?.creativity === 'high' ? 0.9 : settings?.creativity === 'low' ? 0.3 : 0.7
+      temperature: variationTemp,
+      presence_penalty: 0.3, // Encourage diverse language
+      frequency_penalty: 0.2  // Reduce repetitive phrases
     });
     
     const content = response.choices[0]?.message?.content?.trim();
@@ -218,12 +248,12 @@ export const generateAIHeadlines = async (productData, audienceData, platformDat
 };
 
 // Generate AI-powered descriptions
-export const generateAIDescriptions = async (productData, audienceData, platformData, settings = {}) => {
+export const generateAIDescriptions = async (productData, audienceData, platformData, settings = {}, variationIndex = 0) => {
   try {
     // Check cache first
-    const cacheKey = generateCacheKey('description', productData, audienceData, platformData, settings);
+    const cacheKey = generateCacheKey('description', productData, audienceData, platformData, settings, variationIndex);
     if (copyCache.has(cacheKey)) {
-      console.log('📋 Using cached descriptions');
+      console.log(`📋 Using cached descriptions for variation ${variationIndex}`);
       return copyCache.get(cacheKey);
     }
     
@@ -234,10 +264,14 @@ export const generateAIDescriptions = async (productData, audienceData, platform
     }
     
     // Build prompt
-    const prompt = buildPrompt('description', productData, audienceData, platformData, settings);
+    const prompt = buildPrompt('description', productData, audienceData, platformData, settings, variationIndex);
     
-    console.log('🤖 Generating AI descriptions...');
+    console.log(`🤖 Generating AI descriptions for variation ${variationIndex}...`);
     console.log('📝 Prompt:', prompt.substring(0, 200) + '...');
+    
+    // Vary temperature based on variation to ensure different outputs
+    const baseTemp = settings?.creativity === 'high' ? 0.9 : settings?.creativity === 'low' ? 0.3 : 0.7;
+    const variationTemp = Math.min(1.0, baseTemp + (variationIndex * 0.1)); // Increase temperature for later variations
     
     // Call OpenAI API
     const response = await client.chat.completions.create({
@@ -245,7 +279,7 @@ export const generateAIDescriptions = async (productData, audienceData, platform
       messages: [
         {
           role: 'system',
-          content: 'You are an expert copywriter specializing in digital advertising. Create compelling, conversion-focused ad copy that resonates with target audiences.'
+          content: 'You are an expert copywriter specializing in digital advertising. Create compelling, conversion-focused ad copy that resonates with target audiences. Each request should produce unique, distinctly different variations.'
         },
         {
           role: 'user',
@@ -253,7 +287,9 @@ export const generateAIDescriptions = async (productData, audienceData, platform
         }
       ],
       max_tokens: 300,
-      temperature: settings?.creativity === 'high' ? 0.9 : settings?.creativity === 'low' ? 0.3 : 0.7
+      temperature: variationTemp,
+      presence_penalty: 0.3, // Encourage diverse language
+      frequency_penalty: 0.2  // Reduce repetitive phrases
     });
     
     const content = response.choices[0]?.message?.content?.trim();

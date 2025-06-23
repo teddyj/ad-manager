@@ -364,12 +364,18 @@ const CreativeBuilder = ({
     
     // Select product image for this variation (cycle through available images)
     const selectedImage = productImages.length > 0 
-      ? productImages[index % productImages.length] 
+      ? (productImages[index % productImages.length]?.url || productImages[index % productImages.length])
       : null;
     
     console.log('🖼️ Product image selection:', {
-      productImages: productImages,
+      productImagesCount: productImages.length,
+      productImagesStructure: productImages.map(img => ({
+        hasUrl: !!img?.url,
+        url: img?.url || img,
+        type: typeof img
+      })),
       selectedImage: selectedImage,
+      selectedImageType: typeof selectedImage,
       index: index,
       variationStyle: currentStyle
     });
@@ -521,8 +527,11 @@ const CreativeBuilder = ({
     const imageContent = content.productImage || null; // Use null for no image to show placeholder in preview
     
     console.log('🎨 Adding product image element:', {
-      productImage: content.productImage,
-      imageContent: imageContent,
+      originalProductImage: content.productImage,
+      productImageType: typeof content.productImage,
+      finalImageContent: imageContent,
+      imageContentType: typeof imageContent,
+      isValidUrl: imageContent && typeof imageContent === 'string' && imageContent.startsWith('http'),
       position: { x: imageX, y: imageY },
       size: { width: imageSize, height: imageSize }
     });
