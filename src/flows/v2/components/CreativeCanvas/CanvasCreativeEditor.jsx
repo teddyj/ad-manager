@@ -303,7 +303,8 @@ const CreativePreview = ({ creative, format, canvasState }) => {
               ...commonStyles,
               backgroundImage: `url(${element.content})`,
               backgroundSize: 'cover',
-              backgroundPosition: 'center'
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
             }}
           />
         );

@@ -44,17 +44,17 @@ const CreativeBuilder = ({
     console.log('CreativeBuilder initializing with data:', data);
     console.log('Initial selectedFormats:', initialData.selectedFormats);
     
-    // Fix any lowercase format IDs that might be in the data
+        // Ensure format IDs are lowercase to match the format.id properties
     if (initialData.selectedFormats && Array.isArray(initialData.selectedFormats)) {
       initialData.selectedFormats = initialData.selectedFormats.map(formatId => {
-        const upperFormatId = formatId.toUpperCase();
-        if (formatId !== upperFormatId) {
-          console.warn(`Converting lowercase format ID '${formatId}' to '${upperFormatId}'`);
+        const lowerFormatId = formatId.toLowerCase();
+        if (formatId !== lowerFormatId) {
+          console.log(`Normalizing format ID '${formatId}' to '${lowerFormatId}'`);
         }
-        return upperFormatId;
+        return lowerFormatId;
       });
     }
-    
+
     // Validate that creatives object exists and has proper structure
     if (initialData.creatives && typeof initialData.creatives === 'object') {
       const newCreatives = {};
@@ -65,12 +65,12 @@ const CreativeBuilder = ({
           return;
         }
         
-        // Fix lowercase format IDs in creatives
-        const upperFormatId = formatId.toUpperCase();
-        if (formatId !== upperFormatId) {
-          console.warn(`Converting lowercase creative format ID '${formatId}' to '${upperFormatId}'`);
+        // Ensure lowercase format IDs in creatives
+        const lowerFormatId = formatId.toLowerCase();
+        if (formatId !== lowerFormatId) {
+          console.log(`Normalizing creative format ID '${formatId}' to '${lowerFormatId}'`);
         }
-        newCreatives[upperFormatId] = creative;
+        newCreatives[lowerFormatId] = creative;
       });
       initialData.creatives = newCreatives;
     }
@@ -367,6 +367,13 @@ const CreativeBuilder = ({
       ? productImages[index % productImages.length] 
       : null;
     
+    console.log('🖼️ Product image selection:', {
+      productImages: productImages,
+      selectedImage: selectedImage,
+      index: index,
+      variationStyle: currentStyle
+    });
+    
     // Generate canvas-compatible creative structure
     const backgroundColor = getBackgroundColor(creativeData.generationSettings.style, index);
     const textColor = getTextColor(creativeData.generationSettings.style, index);
@@ -451,45 +458,24 @@ const CreativeBuilder = ({
       size: { width, height },
       zIndex: 0,
       styles: {
-        backgroundColor: content.backgroundColor,
-        backgroundImage: content.productImage ? `url(${content.productImage})` : null,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
+        backgroundColor: content.backgroundColor
       },
       interactive: false,
       locked: false
     });
     
-    // Product image element (if separate from background)
-    if (content.productImage && format.platforms.includes('meta')) {
-      const imageSize = Math.min(width * 0.4, height * 0.4);
-      elements.push({
-        id: 'product-image-1',
-        type: 'image',
-        content: content.productImage,
-        position: { 
-          x: (width - imageSize) / 2, 
-          y: height * 0.1 
-        },
-        size: { width: imageSize, height: imageSize },
-        zIndex: 1,
-        styles: {
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        },
-        interactive: true,
-        locked: false
-      });
-    }
+    // Layout: Headline → Description → Image → CTA
+    const padding = width * 0.05; // 5% padding
+    const spacing = height * 0.05; // 5% spacing between elements
     
-    // Headline element
-    const headlineY = content.productImage ? height * 0.55 : height * 0.2;
+    // Headline element (top)
+    const headlineHeight = height * 0.12;
     elements.push({
       id: 'headline-1',
       type: 'text',
       content: content.headline,
-      position: { x: width * 0.05, y: headlineY },
-      size: { width: width * 0.9, height: height * 0.15 },
+      position: { x: padding, y: spacing },
+      size: { width: width - (padding * 2), height: headlineHeight },
       zIndex: 2,
       styles: {
         fontSize: getFontSize(width, 'headline'),
@@ -503,14 +489,15 @@ const CreativeBuilder = ({
       locked: false
     });
     
-    // Description element
-    const descY = headlineY + (height * 0.18);
+    // Description element (below headline)
+    const descriptionY = spacing + headlineHeight + spacing;
+    const descriptionHeight = height * 0.15;
     elements.push({
       id: 'description-1',
       type: 'text',
       content: content.description,
-      position: { x: width * 0.05, y: descY },
-      size: { width: width * 0.9, height: height * 0.2 },
+      position: { x: padding, y: descriptionY },
+      size: { width: width - (padding * 2), height: descriptionHeight },
       zIndex: 2,
       styles: {
         fontSize: getFontSize(width, 'body'),
@@ -525,7 +512,38 @@ const CreativeBuilder = ({
       locked: false
     });
     
-    // CTA Button element
+    // Product image element (center, below description)
+    const imageY = descriptionY + descriptionHeight + spacing;
+    const imageSize = Math.min(width * 0.6, height * 0.35); // Larger image
+    const imageX = (width - imageSize) / 2;
+    
+    // Always add image element - use placeholder if no product image
+    const imageContent = content.productImage || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"%3E%3Crect width="200" height="200" fill="%23f3f4f6"/%3E%3Ctext x="100" y="100" text-anchor="middle" dy="0.35em" fill="%23d1d5db" font-family="Arial, sans-serif" font-size="14"%3EProduct Image%3C/text%3E%3C/svg%3E';
+    
+    console.log('🎨 Adding product image element:', {
+      productImage: content.productImage,
+      imageContent: imageContent,
+      position: { x: imageX, y: imageY },
+      size: { width: imageSize, height: imageSize }
+    });
+    
+    elements.push({
+      id: 'product-image-1',
+      type: 'image',
+      content: imageContent,
+      position: { x: imageX, y: imageY },
+      size: { width: imageSize, height: imageSize },
+      zIndex: 1,
+      styles: {
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        objectFit: 'cover'
+      },
+      interactive: true,
+      locked: false
+    });
+    
+    // CTA Button element (bottom)
     const ctaWidth = Math.min(width * 0.4, 120);
     const ctaHeight = Math.min(height * 0.08, 40);
     elements.push({
@@ -534,7 +552,7 @@ const CreativeBuilder = ({
       content: content.cta,
       position: { 
         x: (width - ctaWidth) / 2, 
-        y: height - (height * 0.15) 
+        y: height - ctaHeight - spacing
       },
       size: { width: ctaWidth, height: ctaHeight },
       zIndex: 3,
@@ -614,12 +632,13 @@ const CreativeBuilder = ({
     // Use AI generation if available
     if (isOpenAIAvailable() && import.meta.env.VITE_CREATIVE_AI === 'true') {
       try {
-        console.log('🤖 Generating AI headlines...');
+        console.log(`🤖 Generating AI headlines for variation ${variation}...`);
         const aiHeadlines = await generateAIHeadlines(
           product,
           audienceData,
           platformData,
-          creativeData.aiCopySettings
+          creativeData.aiCopySettings,
+          variation
         );
         
         // Add price if requested and available
@@ -673,12 +692,13 @@ const CreativeBuilder = ({
     // Use AI generation if available
     if (isOpenAIAvailable() && import.meta.env.VITE_CREATIVE_AI === 'true') {
       try {
-        console.log('🤖 Generating AI descriptions...');
+        console.log(`🤖 Generating AI descriptions for variation ${variation}...`);
         const aiDescriptions = await generateAIDescriptions(
           product,
           audienceData,
           platformData,
-          creativeData.aiCopySettings
+          creativeData.aiCopySettings,
+          variation
         );
         return aiDescriptions;
       } catch (error) {
