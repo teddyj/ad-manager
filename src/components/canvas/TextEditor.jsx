@@ -140,7 +140,11 @@ function TextEditor({
       }}
     >
       {/* Inline editing toolbar */}
-      <div className="absolute -top-12 left-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 flex items-center space-x-2 z-10">
+      <div 
+        className="absolute -top-12 left-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 flex items-center space-x-2 z-10"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* Text formatting buttons */}
         <button
           type="button"
@@ -213,6 +217,8 @@ function TextEditor({
           max="72"
           value={parseInt(element.styles.fontSize)}
           onChange={(e) => formatText('fontSize', e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className="w-16 h-2"
           title="Font Size"
         />
@@ -225,6 +231,8 @@ function TextEditor({
           type="color"
           value={element.styles.color}
           onChange={(e) => formatText('color', e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className="w-8 h-8 border border-gray-300 rounded cursor-pointer"
           title="Text Color"
         />
@@ -264,6 +272,8 @@ function TextEditor({
           }}
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className="w-full p-2 border-2 border-blue-500 rounded resize-none outline-none"
           style={{
             fontFamily: element.styles.fontFamily,
@@ -289,6 +299,8 @@ function TextEditor({
           onChange={(e) => handleContentChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className="w-full p-2 border-2 border-blue-500 rounded outline-none"
           style={{
             fontFamily: element.styles.fontFamily,

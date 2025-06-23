@@ -1,10 +1,224 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import CanvasEditor from '../../../../components/canvas/CanvasEditor.jsx';
-import { PencilIcon, EyeIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, EyeIcon, CheckIcon, XMarkIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline';
 
 /**
- * Canvas Creative Editor for Campaign Flow V2
- * Integrates the existing canvas editor with the new campaign flow
+ * Simple Creative Preview Component - renders creative elements without editing capabilities
+ * Shows the actual rendered creative (headline, description, product image, CTA) in a clean format
+ * Always renders as a clean preview, never shows editing interface
+ */
+const CreativePreview = ({ canvasState, format, scale = 0.5, creative }) => {
+  const elements = canvasState?.elements || [];
+  const backgroundColor = canvasState?.meta?.backgroundColor || creative?.elements?.backgroundColor || '#ffffff';
+  
+  // Debug logging
+  console.log('🎨 CreativePreview received:', {
+    hasCanvasElements: elements.length > 0,
+    canvasElementsCount: elements.length,
+    hasCreativeElements: !!creative?.elements,
+    creativeElementsStructure: creative?.elements ? Object.keys(creative.elements) : null,
+    format: format,
+    scale: scale
+  });
+
+  // Always try to extract content from both canvas elements and legacy structure
+  const extractedContent = {
+    headline: null,
+    description: null,
+    productImage: null,
+    cta: null,
+    backgroundColor: backgroundColor,
+    textColor: '#333333'
+  };
+
+  // Extract from canvas elements if they exist
+  if (elements.length > 0) {
+    elements.forEach(element => {
+      switch (element.type) {
+        case 'text':
+          if (element.id.includes('headline') && !extractedContent.headline) {
+            extractedContent.headline = element.content;
+          } else if (element.id.includes('description') && !extractedContent.description) {
+            extractedContent.description = element.content;
+          }
+          break;
+        case 'button':
+          if (!extractedContent.cta) {
+            extractedContent.cta = element.content;
+          }
+          break;
+        case 'image':
+        case 'product':
+          if (!extractedContent.productImage && element.content) {
+            extractedContent.productImage = element.content;
+          }
+          break;
+      }
+    });
+  }
+
+  // Fall back to legacy creative structure if canvas extraction didn't work
+  if (creative?.elements) {
+    extractedContent.headline = extractedContent.headline || creative.elements.headline;
+    extractedContent.description = extractedContent.description || creative.elements.description;
+    extractedContent.cta = extractedContent.cta || creative.elements.cta;
+    extractedContent.productImage = extractedContent.productImage || creative.elements.productImage;
+    extractedContent.textColor = creative.elements.textColor || extractedContent.textColor;
+  }
+
+  console.log('📊 Extracted content for preview:', extractedContent);
+
+  // Calculate responsive sizing
+  const containerWidth = format.width * scale;
+  const containerHeight = format.height * scale;
+  const padding = Math.max(12, containerWidth * 0.04);
+  const gap = Math.max(8, containerHeight * 0.03);
+
+  return (
+    <div
+      style={{
+        width: `${containerWidth}px`,
+        height: `${containerHeight}px`,
+        backgroundColor: extractedContent.backgroundColor,
+        position: 'relative',
+        border: '1px solid #e5e7eb',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: `${padding}px`,
+        gap: `${gap}px`,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      }}
+    >
+      {/* Headline */}
+      {extractedContent.headline && (
+        <div
+          style={{
+            fontSize: `${Math.max(14, containerWidth / 18)}px`,
+            fontWeight: 'bold',
+            color: extractedContent.textColor,
+            textAlign: 'center',
+            lineHeight: '1.2',
+            maxWidth: '100%',
+            wordWrap: 'break-word',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}
+        >
+          {extractedContent.headline}
+        </div>
+      )}
+      
+      {/* Description */}
+      {extractedContent.description && (
+        <div
+          style={{
+            fontSize: `${Math.max(11, containerWidth / 24)}px`,
+            color: extractedContent.textColor,
+            textAlign: 'center',
+            lineHeight: '1.4',
+            maxWidth: '100%',
+            wordWrap: 'break-word',
+            opacity: 0.85,
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}
+        >
+          {extractedContent.description}
+        </div>
+      )}
+      
+      {/* Product Image */}
+      {extractedContent.productImage && (
+        <div
+          style={{
+            width: `${Math.min(containerWidth * 0.6, containerHeight * 0.5)}px`,
+            height: `${Math.min(containerWidth * 0.6, containerHeight * 0.5)}px`,
+            borderRadius: '8px',
+            overflow: 'hidden',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            flexShrink: 0
+          }}
+        >
+          <img
+            src={extractedContent.productImage}
+            alt="Product"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
+            draggable={false}
+            onError={(e) => {
+              // Replace with placeholder if image fails to load
+              e.target.style.display = 'none';
+              e.target.parentNode.style.backgroundColor = '#f3f4f6';
+              e.target.parentNode.style.display = 'flex';
+              e.target.parentNode.style.alignItems = 'center';
+              e.target.parentNode.style.justifyContent = 'center';
+              e.target.parentNode.innerHTML = '<div style="color: #6b7280; font-size: 12px;">Product Image</div>';
+            }}
+          />
+        </div>
+      )}
+      
+      {/* CTA Button */}
+      {extractedContent.cta && (
+        <div
+          style={{
+            backgroundColor: '#3b82f6',
+            color: '#ffffff',
+            padding: `${Math.max(6, containerHeight * 0.02)}px ${Math.max(12, containerWidth * 0.04)}px`,
+            borderRadius: '6px',
+            fontSize: `${Math.max(11, containerWidth / 26)}px`,
+            fontWeight: '600',
+            cursor: 'default',
+            boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)',
+            textAlign: 'center',
+            maxWidth: '90%',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            marginTop: 'auto'
+          }}
+        >
+          {extractedContent.cta}
+        </div>
+      )}
+      
+      {/* Fallback content if no data extracted */}
+      {!extractedContent.headline && !extractedContent.description && !extractedContent.productImage && !extractedContent.cta && (
+        <div style={{
+          color: '#9ca3af',
+          fontSize: `${Math.max(12, containerWidth / 20)}px`,
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: `${gap}px`
+        }}>
+          <div style={{ fontSize: `${Math.max(24, containerWidth / 12)}px` }}>📄</div>
+          <div>Creative Preview</div>
+          <div style={{ fontSize: `${Math.max(10, containerWidth / 30)}px`, opacity: 0.7 }}>
+            {format.width} × {format.height}px
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Canvas Creative Editor with Full-Screen Modal
+ * FIXED: Canvas controls, state synchronization, and prop interface
  */
 const CanvasCreativeEditor = ({ 
   creative, 
@@ -13,418 +227,201 @@ const CanvasCreativeEditor = ({
   readonly = false,
   className = '' 
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'edit'
-  const [canvasScale, setCanvasScale] = useState(1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('saved');
+  
+  // Use a local state to track canvas changes
+  const [localCanvasState, setLocalCanvasState] = useState(creative?.canvasState || {
+    elements: [],
+    meta: { backgroundColor: '#ffffff' }
+  });
 
-  // Convert creative data to canvas-compatible format
-  const canvasData = useMemo(() => {
+  // Sync local state with creative prop when it changes externally
+  useEffect(() => {
     if (creative?.canvasState) {
-      return creative.canvasState;
+      // Only update if there's a meaningful difference (prevent loops)
+      const currentElements = localCanvasState?.elements || [];
+      const newElements = creative.canvasState?.elements || [];
+      
+      if (newElements.length !== currentElements.length || 
+          JSON.stringify(newElements) !== JSON.stringify(currentElements)) {
+        setLocalCanvasState(creative.canvasState);
+      }
+    }
+  }, [creative?.id]); // Only sync when creative ID changes, not canvas state
+
+  // FIXED: Canvas state change handler with proper debouncing
+  const saveTimeoutRef = useRef(null);
+  
+  const handleCanvasStateChange = useCallback((newCanvasState) => {
+    // Update local state immediately for responsive UI
+    setLocalCanvasState(newCanvasState);
+    setSaveStatus('saving');
+    
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
     
-    // Fallback: convert legacy creative format to canvas
-    return {
-      meta: {
-        adSize: `${format.width}x${format.height}`,
-        format: format.id,
-        backgroundColor: creative?.elements?.backgroundColor || '#ffffff'
-      },
-      elements: [
-        {
-          id: 'headline-1',
-          type: 'text',
-          content: creative?.elements?.headline || 'Your Headline',
-          position: { x: 20, y: 30 },
-          size: { width: format.width - 40, height: 40 },
-          zIndex: 2,
-          styles: {
-            fontSize: '18px',
-            fontWeight: 'bold',
-            color: creative?.elements?.textColor || '#000000',
-            textAlign: 'center'
-          }
-        },
-        {
-          id: 'description-1',
-          type: 'text',
-          content: creative?.elements?.description || 'Your description',
-          position: { x: 20, y: 80 },
-          size: { width: format.width - 40, height: 60 },
-          zIndex: 2,
-          styles: {
-            fontSize: '14px',
-            color: creative?.elements?.textColor || '#000000',
-            textAlign: 'center'
-          }
-        },
-        {
-          id: 'cta-1',
-          type: 'button',
-          content: creative?.elements?.cta || 'Shop Now',
-          position: { x: (format.width - 100) / 2, y: format.height - 60 },
-          size: { width: 100, height: 40 },
-          zIndex: 3,
-          styles: {
-            backgroundColor: '#007bff',
-            color: '#ffffff',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            border: 'none',
-            borderRadius: '6px'
-          }
-        }
-      ]
-    };
-  }, [creative, format]);
-
-  // Handle canvas state changes
-  const handleCanvasStateChange = useCallback((newCanvasState) => {
-    const updatedCreative = {
-      ...creative,
-      canvasState: newCanvasState,
-      lastEdited: new Date().toISOString(),
-      // Update legacy format for compatibility
-      elements: {
-        ...creative?.elements,
-        headline: newCanvasState.elements?.find(el => el.type === 'text' && el.id.includes('headline'))?.content || creative?.elements?.headline,
-        description: newCanvasState.elements?.find(el => el.type === 'text' && el.id.includes('description'))?.content || creative?.elements?.description,
-        cta: newCanvasState.elements?.find(el => el.type === 'button')?.content || creative?.elements?.cta
-      }
-    };
-    
-    onCreativeUpdate?.(updatedCreative);
+    // Debounce the save to prevent rapid updates
+    saveTimeoutRef.current = setTimeout(() => {
+      const updatedCreative = {
+        ...creative,
+        canvasState: newCanvasState,
+        lastEdited: Date.now()
+      };
+      
+      // Call the parent update function
+      onCreativeUpdate(updatedCreative);
+      setSaveStatus('saved');
+    }, 300); // 300ms debounce
   }, [creative, onCreativeUpdate]);
 
-  // Toggle between preview and edit modes
-  const toggleEditMode = () => {
-    setViewMode(prev => prev === 'preview' ? 'edit' : 'preview');
-    setIsEditing(prev => !prev);
-  };
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
-  // Fit canvas to container
-  const fitToScreen = () => {
-    setCanvasScale(0.6); // Smaller scale for better editing
-  };
+  // Open modal for editing
+  const openModal = useCallback(() => {
+    if (!readonly) {
+      setIsModalOpen(true);
+    }
+  }, [readonly]);
 
-  // Reset canvas scale
-  const resetScale = () => {
-    setCanvasScale(1);
-  };
+  // Close modal
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
 
-  // Shrink canvas for editing
-  const shrinkForEditing = () => {
-    setCanvasScale(0.4); // Very small for element access
-  };
+  // Handle backdrop click (only close if clicking the backdrop, not the modal content)
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      closeModal();
+    }
+  }, [closeModal]);
 
   return (
-    <div className={`creative-canvas-editor ${className}`}>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
-        <div className="flex items-center space-x-3">
-          <h3 className="font-medium text-gray-900">
-            {creative?.name || `${format.name} Creative`}
-          </h3>
-          <span className="text-sm text-gray-500">
-            {format.dimensions}
-          </span>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {/* Scale Controls */}
-          <button
-            onClick={shrinkForEditing}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
-            title="Shrink for editing (40%)"
-          >
-            <span className="text-xs font-mono">40%</span>
-          </button>
-          
-          <button
-            onClick={fitToScreen}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
-            title="Fit to screen (60%)"
-          >
-            <ArrowsPointingInIcon className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={resetScale}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
-            title="Reset scale (100%)"
-          >
-            <ArrowsPointingOutIcon className="w-4 h-4" />
-          </button>
-          
-          {/* View Mode Toggle */}
+    <>
+      {/* Preview Mode - Click to Edit */}
+      <div className={`border border-gray-200 rounded-lg overflow-hidden bg-white ${className}`}>
+        {/* Header */}
+        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <EyeIcon className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Creative Preview</span>
+          </div>
           {!readonly && (
             <button
-              onClick={toggleEditMode}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium transition-colors ${
-                isEditing
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              onClick={openModal}
+              className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
             >
-              {isEditing ? (
-                <>
-                  <EyeIcon className="w-4 h-4" />
-                  <span>Preview</span>
-                </>
-              ) : (
-                <>
-                  <PencilIcon className="w-4 h-4" />
-                  <span>Edit</span>
-                </>
-              )}
+              <PencilIcon className="w-4 h-4" />
+              Edit Canvas
             </button>
+          )}
+        </div>
+
+        {/* Preview Canvas - Now shows actual rendered creative */}
+        <div 
+          className="p-6 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-center"
+          onClick={!readonly ? openModal : undefined}
+          style={{ minHeight: '400px' }}
+        >
+          {(localCanvasState.elements?.length > 0 || creative?.elements) ? (
+            <CreativePreview 
+              canvasState={localCanvasState} 
+              format={format}
+              scale={Math.min(350 / format.width, 300 / format.height, 0.8)}
+              creative={creative}
+            />
+          ) : (
+            <div className="text-gray-400 text-sm text-center">
+              <ArrowsPointingOutIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <div>Click to create your ad</div>
+              <div className="text-xs text-gray-400 mt-1">
+                {format.width} × {format.height}px
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Canvas Container */}
-      <div className="canvas-container border border-gray-200 rounded-lg overflow-hidden bg-white">
-        {viewMode === 'edit' && !readonly ? (
-          /* Edit Mode - Scalable Canvas Editor */
+      {/* Full-Screen Modal for Editing */}
+      {isModalOpen && (
+        <div 
+          className="fixed inset-0 z-50"
+          onClick={handleBackdropClick}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black bg-opacity-75" />
+          
+          {/* Modal Content */}
           <div 
-            className="flex items-center justify-center p-4"
-            style={{ 
-              minHeight: '500px',
-              height: 'auto' // Allow dynamic height
-            }}
+            className="relative w-full h-full bg-white flex flex-col"
+            onClick={(e) => e.stopPropagation()} // Prevent modal close when clicking inside
           >
-            <div 
-              style={{
-                transform: `scale(${canvasScale})`,
-                transformOrigin: 'center',
-                width: format.width,
-                height: format.height
-              }}
-            >
+            {/* Modal Header */}
+            <div className="bg-gray-800 text-white px-6 py-4 flex items-center justify-between border-b flex-shrink-0 z-50">
+              <div className="flex items-center gap-3">
+                <PencilIcon className="w-5 h-5" />
+                <h2 className="text-lg font-semibold">Canvas Editor</h2>
+                <div className="ml-4 flex items-center gap-2">
+                  {saveStatus === 'saving' && (
+                    <div className="flex items-center gap-2 text-blue-400">
+                      <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm">Saving...</span>
+                    </div>
+                  )}
+                  {saveStatus === 'saved' && (
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckIcon className="w-4 h-4" />
+                      <span className="text-sm">Saved</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={closeModal}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Canvas Container - FIXED: Proper event handling and positioning */}
+            <div className="flex-1 bg-gray-100 relative">
               <CanvasEditor
-                adData={{
-                  title: creative?.elements?.headline,
-                  description: creative?.elements?.description
-                }}
-                campaignSettings={{}}
-                initialAdSize={`${format.width}x${format.height}`}
-                canvasState={canvasData}
+                key={`canvas-modal-${creative?.id}`}
+                canvasState={localCanvasState}
                 onCanvasStateChange={handleCanvasStateChange}
-                readonly={false}
-                viewportScale={1} // Set to 1 since we're handling scaling externally
-                showScaleControls={false}
-                onScaleChange={setCanvasScale}
-                onFitToScreen={fitToScreen}
-                isResponsiveMode={false}
-                currentFormat={format}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Preview Mode - Static Preview */
-          <div className="flex items-center justify-center p-8 min-h-[400px]">
-            <div 
-              className="creative-preview border border-gray-300 rounded-lg overflow-hidden shadow-sm"
-              style={{
-                width: format.width * canvasScale,
-                height: format.height * canvasScale,
-                transform: `scale(${Math.min(canvasScale, 0.8)})`,
-                transformOrigin: 'center'
-              }}
-            >
-              <CreativePreview 
-                creative={creative}
+                onPublish={(publishedData) => {
+                  // Handle publish by closing modal and updating creative
+                  closeModal();
+                  if (onCreativeUpdate) {
+                    onCreativeUpdate({
+                      ...creative,
+                      ...publishedData,
+                      canvasState: localCanvasState
+                    });
+                  }
+                }}
                 format={format}
-                canvasState={canvasData}
+                viewportScale={1.0}
+                showToolbar={true}
+                showScaleControls={true}
+                readonly={false}
+                className="w-full h-full"
               />
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Creative Info */}
-      <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-        <div className="text-center p-3 bg-gray-50 rounded-lg">
-          <div className="font-medium text-gray-900">Format</div>
-          <div className="text-gray-600">{format.name}</div>
         </div>
-        <div className="text-center p-3 bg-gray-50 rounded-lg">
-          <div className="font-medium text-gray-900">Style</div>
-          <div className="text-gray-600 capitalize">{creative?.style || 'A'}</div>
-        </div>
-        <div className="text-center p-3 bg-gray-50 rounded-lg">
-          <div className="font-medium text-gray-900">Last Edited</div>
-          <div className="text-gray-600">
-            {creative?.lastEdited 
-              ? new Date(creative.lastEdited).toLocaleDateString() 
-              : 'Never'
-            }
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Creative Preview Component
- * Renders a static preview of the creative
- */
-const CreativePreview = ({ creative, format, canvasState }) => {
-  const renderElement = (element) => {
-    const commonStyles = {
-      position: 'absolute',
-      left: element.position.x,
-      top: element.position.y,
-      width: element.size.width,
-      height: element.size.height,
-      zIndex: element.zIndex,
-      ...element.styles
-    };
-
-    switch (element.type) {
-      case 'background':
-        return (
-          <div
-            key={element.id}
-            style={{
-              ...commonStyles,
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%'
-            }}
-          />
-        );
-      
-      case 'text':
-        return (
-          <div
-            key={element.id}
-            style={commonStyles}
-            className="flex items-center justify-center"
-          >
-            <span style={{ textAlign: element.styles.textAlign || 'center' }}>
-              {element.content}
-            </span>
-          </div>
-        );
-      
-      case 'button':
-        return (
-          <button
-            key={element.id}
-            style={{
-              ...commonStyles,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: element.styles.border || '2px solid #1e40af',
-              borderRadius: element.styles.borderRadius || '8px',
-              backgroundColor: element.styles.backgroundColor || '#1e40af',
-              color: element.styles.color || '#ffffff',
-              fontSize: element.styles.fontSize || '16px',
-              fontWeight: element.styles.fontWeight || '700',
-              fontFamily: element.styles.fontFamily || 'Inter, sans-serif',
-              cursor: 'pointer',
-              outline: 'none',
-              textAlign: 'center',
-              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2)',
-              padding: '12px 20px',
-              letterSpacing: '0.025em',
-              textTransform: 'uppercase',
-              transition: 'all 0.2s ease',
-              minHeight: '44px' // Ensure minimum touch target
-            }}
-            disabled
-          >
-            {element.content}
-          </button>
-        );
-      
-      case 'image':
-        return (
-          <div
-            key={element.id}
-            style={{
-              ...commonStyles,
-              backgroundImage: element.content ? `url(${element.content})` : 'none',
-              backgroundSize: element.styles.objectFit || 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              borderRadius: element.styles.borderRadius || '8px',
-              boxShadow: element.styles.boxShadow || '0 4px 12px rgba(0,0,0,0.1)',
-              border: element.content ? 'none' : '2px dashed #d1d5db',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            {!element.content && (
-              <span style={{ 
-                color: '#9ca3af', 
-                fontSize: '12px', 
-                textAlign: 'center',
-                fontFamily: 'Inter, sans-serif'
-              }}>
-                Product Image
-              </span>
-            )}
-          </div>
-        );
-      
-      default:
-        return (
-          <div key={element.id} style={commonStyles}>
-            {element.content}
-          </div>
-        );
-    }
-  };
-
-  // Use canvasState.elements if available, otherwise fall back to creative.canvasState
-  const elements = canvasState?.elements || creative?.canvasState?.elements || [];
-  const backgroundColor = canvasState?.meta?.backgroundColor || creative?.canvasState?.meta?.backgroundColor || creative?.elements?.backgroundColor || '#ffffff';
-
-  console.log('🎨 CreativePreview rendering:', {
-    elementsCount: elements.length,
-    backgroundColor: backgroundColor,
-    formatSize: `${format.width}x${format.height}`,
-    canvasStateProvided: !!canvasState,
-    creativeCanvasStateProvided: !!creative?.canvasState,
-    elements: elements.map(el => ({ 
-      id: el.id, 
-      type: el.type, 
-      content: el.type === 'image' ? (el.content || 'No image URL') : (el.content ? 'Has content' : 'No content'),
-      imageUrl: el.type === 'image' ? el.content : undefined
-    }))
-  });
-  
-  // Debug image elements specifically
-  const imageElements = elements.filter(el => el.type === 'image');
-  if (imageElements.length > 0) {
-    console.log('🖼️ Image elements found:', imageElements.map(img => ({
-      id: img.id,
-      content: img.content,
-      hasContent: !!img.content,
-      position: img.position,
-      size: img.size
-    })));
-  }
-
-  return (
-    <div 
-      className="relative overflow-hidden"
-      style={{
-        width: format.width,
-        height: format.height,
-        backgroundColor: backgroundColor
-      }}
-    >
-      {elements.map(renderElement)}
-    </div>
+      )}
+    </>
   );
 };
 

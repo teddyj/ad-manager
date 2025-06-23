@@ -536,6 +536,18 @@ const CreativeBuilder = ({
       size: { width: imageSize, height: imageSize }
     });
     
+    console.log('🛠️ Generated canvas elements for format:', {
+      formatId: format.id,
+      formatSize: `${format.width}x${format.height}`,
+      totalElements: elements.length + 1, // +1 for the image we're about to add
+      hasHeadline: !!content.headline,
+      hasDescription: !!content.description,
+      hasCTA: !!content.cta,
+      hasProductImage: !!imageContent,
+      backgroundColor: content.backgroundColor,
+      textColor: content.textColor
+    });
+    
     elements.push({
       id: 'product-image-1',
       type: 'image',
@@ -583,6 +595,12 @@ const CreativeBuilder = ({
       locked: false
     });
     
+    console.log('✅ Final canvas elements generated:', {
+      totalElements: elements.length,
+      elementTypes: elements.map(el => ({ id: el.id, type: el.type, hasContent: !!el.content })),
+      formatDimensions: `${width}x${height}`
+    });
+    
     return elements;
   };
 
@@ -590,9 +608,9 @@ const CreativeBuilder = ({
   const getFontSize = (canvasWidth, elementType) => {
     const baseSize = canvasWidth / 20; // Base font size relative to canvas width
     const multipliers = {
-      headline: 1.4,
-      body: 0.8,
-      button: 0.9
+      headline: 0.6, // Further reduced from 1.0 to 0.6 for much smaller headlines
+      body: 0.4,     // Further reduced from 0.6 to 0.4 for much smaller descriptions
+      button: 0.5    // Reduced button text size too
     };
     return `${Math.round(baseSize * multipliers[elementType])}px`;
   };
@@ -1235,33 +1253,95 @@ const CreativeBuilder = ({
                     
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                       {creativeData.creatives[previewFormat].variations.map((creative, index) => (
-                        <div key={creative.id} className="border rounded-lg p-4 bg-white">
-                          <div className="aspect-video bg-gray-100 rounded-md mb-3 p-4 flex flex-col justify-between"
-                               style={{ backgroundColor: creative.elements.backgroundColor, color: creative.elements.textColor }}>
-                            <div>
-                              <h5 className="font-bold text-lg mb-2">{creative.elements.headline}</h5>
-                              <p className="text-sm opacity-90">{creative.elements.description}</p>
-                            </div>
-                            <div className="text-right">
-                              <span className="inline-block bg-white bg-opacity-20 px-3 py-1 rounded text-sm font-medium">
-                                {creative.elements.cta}
-                              </span>
+                        <div key={`${creative.id}-${creative.lastEdited || 'initial'}-${creative.canvasEnabled ? 'canvas' : 'basic'}`} className="border rounded-lg p-4 bg-white">
+                          {/* Canvas Preview - Always show latest canvas state */}
+                          <div className="mb-3 bg-gray-100 rounded-md overflow-hidden relative">
+                            <div 
+                              className="transform scale-50 origin-top-left"
+                              style={{ 
+                                width: `${creativeData.creatives[previewFormat].format.width * 0.5}px`,
+                                height: `${creativeData.creatives[previewFormat].format.height * 0.5}px`
+                              }}
+                            >
+                              <CanvasCreativeEditor
+                                creative={creative}
+                                format={creativeData.creatives[previewFormat].format}
+                                onCreativeUpdate={(updatedCreative) => {
+                                  console.log('🔄 Preview creative update:', updatedCreative.id);
+                                  const updatedCreatives = { ...creativeData.creatives };
+                                  updatedCreatives[previewFormat].variations[index] = updatedCreative;
+                                  handleCreativeUpdate({ 
+                                    creatives: updatedCreatives,
+                                    lastPreviewUpdate: Date.now() 
+                                  });
+                                }}
+                                readonly={true}
+                                className="w-full"
+                                key={`preview-${creative.id}-${creative.lastEdited}-${index}`} // Force re-render on changes
+                              />
                             </div>
                           </div>
                           
+                          {/* Creative Info */}
                           <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Est. CTR:</span>
-                              <span className="font-medium text-green-600">{creative.performance.estimatedCTR}%</span>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-medium text-gray-900">Style {creative.style}</h5>
+                                {creative.lastEdited && (
+                                  <p className="text-xs text-gray-500">
+                                    Edited: {new Date(creative.lastEdited).toLocaleString()}
+                                  </p>
+                                )}
+                                {creative.canvasState?.elements?.length > 0 && (
+                                  <p className="text-xs text-blue-600 font-medium">
+                                    {creative.canvasState.elements.length} canvas elements
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex flex-col space-y-1">
+                                {creative.canvasEnabled && (
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                    Canvas Edited
+                                  </span>
+                                )}
+                                {creative.canvasState?.elements?.length > 0 && (
+                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                    Custom Layout
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Est. CPC:</span>
-                              <span className="font-medium text-blue-600">${creative.performance.estimatedCPC}</span>
+                            
+                            {/* Performance Metrics */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Est. CTR:</span>
+                                <span className="font-medium text-green-600">{creative.performance.estimatedCTR}%</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Est. CPC:</span>
+                                <span className="font-medium text-blue-600">${creative.performance.estimatedCPC}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Brand Safety:</span>
+                                <span className="font-medium text-purple-600">{creative.performance.brandSafety}%</span>
+                              </div>
                             </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Brand Safety:</span>
-                              <span className="font-medium text-purple-600">{creative.performance.brandSafety}%</span>
-                            </div>
+                            
+                            {/* Quick Edit Button */}
+                            <button
+                              onClick={() => {
+                                setActiveTab('canvas');
+                                setPreviewFormat(previewFormat);
+                                // Set the selected variation
+                                const updatedCreatives = { ...creativeData.creatives };
+                                updatedCreatives[previewFormat].selectedVariation = index;
+                                handleCreativeUpdate({ creatives: updatedCreatives });
+                              }}
+                              className="w-full mt-3 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors"
+                            >
+                              🎨 Edit in Canvas
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1434,13 +1514,33 @@ const CreativeBuilder = ({
                         creative={creativeData.creatives[previewFormat].variations[creativeData.creatives[previewFormat].selectedVariation]}
                         format={creativeData.creatives[previewFormat].format}
                         onCreativeUpdate={(updatedCreative) => {
+                          console.log('🎨 Canvas editor updating creative:', {
+                            formatId: previewFormat,
+                            selectedVariation: creativeData.creatives[previewFormat].selectedVariation,
+                            updatedCreativeId: updatedCreative.id,
+                            hasCanvasState: !!updatedCreative.canvasState,
+                            elementsCount: updatedCreative.canvasState?.elements?.length,
+                            lastEdited: updatedCreative.lastEdited
+                          });
+                          
                           const updatedCreatives = { ...creativeData.creatives };
                           const selectedVariation = updatedCreatives[previewFormat].selectedVariation;
                           updatedCreatives[previewFormat].variations[selectedVariation] = updatedCreative;
-                          handleCreativeUpdate({ creatives: updatedCreatives });
+                          
+                          console.log('💾 Saving updated creative to main state:', {
+                            formatId: previewFormat,
+                            variationIndex: selectedVariation,
+                            creativeName: updatedCreative.name
+                          });
+                          
+                          // Update the creative data
+                          handleCreativeUpdate({ 
+                            creatives: updatedCreatives
+                          });
                         }}
                         readonly={false}
                         className="w-full"
+                        key={`canvas-editor-${previewFormat}-${creativeData.creatives[previewFormat].selectedVariation}`}
                       />
                     </div>
 

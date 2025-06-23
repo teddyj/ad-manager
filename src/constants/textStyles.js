@@ -9,7 +9,7 @@ export const TEXT_STYLES = {
     id: 'headline-primary',
     name: 'Primary Headline',
     fontFamily: 'Inter, sans-serif',
-    fontSize: '24px',
+    fontSize: '14px', // Further reduced from 20px to 14px
     fontWeight: 'bold',
     color: '#1a1a1a',
     textAlign: 'center',
@@ -21,7 +21,7 @@ export const TEXT_STYLES = {
     id: 'headline-secondary',
     name: 'Secondary Headline',
     fontFamily: 'Inter, sans-serif', 
-    fontSize: '18px',
+    fontSize: '12px', // Further reduced from 16px to 12px
     fontWeight: '600',
     color: '#333333',
     textAlign: 'center',
@@ -45,7 +45,7 @@ export const TEXT_STYLES = {
     id: 'body-text',
     name: 'Body Text',
     fontFamily: 'Inter, sans-serif',
-    fontSize: '14px',
+    fontSize: '10px', // Further reduced from 12px to 10px
     fontWeight: 'normal',
     color: '#666666',
     textAlign: 'left',
@@ -57,7 +57,7 @@ export const TEXT_STYLES = {
     id: 'body-large',
     name: 'Large Body Text',
     fontFamily: 'Inter, sans-serif',
-    fontSize: '16px',
+    fontSize: '11px', // Further reduced from 14px to 11px
     fontWeight: 'normal',
     color: '#555555',
     textAlign: 'left',

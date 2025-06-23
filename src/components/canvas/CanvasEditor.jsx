@@ -101,24 +101,98 @@ function CanvasEditor({
   const [internalCanvasState, setInternalCanvasState] = useState(providedCanvasState || getInitialCanvasState());
   const activeCanvasState = providedCanvasState || internalCanvasState;
   
+  // Add a ref to track the latest state to prevent stale closures
+  const latestCanvasStateRef = useRef(activeCanvasState);
+  latestCanvasStateRef.current = activeCanvasState;
+
+  // Add debouncing for rapid style changes (like font size adjustments)
+  const [pendingUpdates, setPendingUpdates] = useState(new Map());
+  const updateTimeoutRef = useRef(null);
+
   // Fixed setActiveCanvasState to handle both function updaters and direct values
   const setActiveCanvasState = useCallback((newStateOrUpdater) => {
     if (onCanvasStateChange) {
       // When we have an external callback, we need to resolve the updater function first
       if (typeof newStateOrUpdater === 'function') {
-        const newState = newStateOrUpdater(activeCanvasState);
-        console.log('🔧 Calling onCanvasStateChange with resolved state:', newState);
+        const currentState = latestCanvasStateRef.current;
+        const newState = newStateOrUpdater(currentState);
+        console.log('🔧 Calling onCanvasStateChange with resolved state:', {
+          elementsCount: newState?.elements?.length,
+          hasChanges: JSON.stringify(currentState) !== JSON.stringify(newState)
+        });
         onCanvasStateChange(newState);
+        latestCanvasStateRef.current = newState;
       } else {
-        console.log('🔧 Calling onCanvasStateChange with direct state:', newStateOrUpdater);
+        console.log('🔧 Calling onCanvasStateChange with direct state:', {
+          elementsCount: newStateOrUpdater?.elements?.length
+        });
         onCanvasStateChange(newStateOrUpdater);
+        latestCanvasStateRef.current = newStateOrUpdater;
       }
     } else {
       // For internal state, we can use the updater function directly
       console.log('🔧 Using internal state setter');
       setInternalCanvasState(newStateOrUpdater);
+      if (typeof newStateOrUpdater !== 'function') {
+        latestCanvasStateRef.current = newStateOrUpdater;
+      }
     }
-  }, [onCanvasStateChange, activeCanvasState]);
+  }, [onCanvasStateChange]);
+
+  // Debounced style update handler to prevent rapid successive updates
+  const handleStyleUpdate = useCallback((elementId, styleUpdates) => {
+    
+    // Update pending updates map
+    setPendingUpdates(prev => {
+      const newUpdates = new Map(prev);
+      const existingUpdates = newUpdates.get(elementId) || {};
+      newUpdates.set(elementId, { ...existingUpdates, ...styleUpdates });
+      return newUpdates;
+    });
+
+    // Clear existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+
+    // Set new timeout for batched updates
+    updateTimeoutRef.current = setTimeout(() => {
+      setPendingUpdates(currentPending => {
+        if (currentPending.size === 0) return currentPending;
+
+        // Apply all pending updates
+        setActiveCanvasState(prev => {
+          const newElements = (prev?.elements || []).map(el => {
+            const updates = currentPending.get(el.id);
+            if (updates) {
+              return {
+                ...el,
+                styles: { ...el.styles, ...updates }
+              };
+            }
+            return el;
+          });
+
+          return {
+            ...prev,
+            elements: newElements
+          };
+        });
+
+        // Clear pending updates
+        return new Map();
+      });
+    }, 50); // Very short debounce for responsiveness
+  }, [setActiveCanvasState]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Selected element state
   const [selectedElementId, setSelectedElementId] = useState(null);
@@ -138,67 +212,52 @@ function CanvasEditor({
   // Element manipulation handlers
   const handleElementUpdate = useCallback((elementId, updates) => {
     if (readonly) return;
-    
-    console.log('🔄 handleElementUpdate called:', {
-      elementId: elementId,
-      updatesKeys: Object.keys(updates),
-      positionUpdate: updates.position ? JSON.stringify(updates.position) : 'NO_POSITION_UPDATE',
-      currentElementsCount: activeCanvasState?.elements?.length
-    });
+
+    // Special handling for style-only updates to prevent conflicts
+    if (updates.styles && Object.keys(updates).length === 1) {
+      handleStyleUpdate(elementId, updates.styles);
+      return;
+    }
     
     setActiveCanvasState(prev => {
-      const oldElements = prev?.elements || [];
-             const newElements = oldElements.map(el => {
-         if (el.id === elementId) {
-           // Deep merge to preserve all properties
-           const updatedElement = {
-             ...el,
-             ...updates,
-             // Ensure position and size are properly merged if they exist
-             position: updates.position ? { ...el.position, ...updates.position } : el.position,
-             size: updates.size ? { ...el.size, ...updates.size } : el.size,
-             styles: updates.styles ? { ...el.styles, ...updates.styles } : el.styles
-           };
-           
-           console.log('🔄 Element being updated:', {
-             id: el.id,
-             type: el.type,
-             oldPosition: JSON.stringify(el.position),
-             newPosition: JSON.stringify(updatedElement.position),
-             oldContent: el.content ? 'HAS_CONTENT' : 'NO_CONTENT',
-             newContent: updatedElement.content ? 'HAS_CONTENT' : 'NO_CONTENT',
-             hasValidPosition: !!(updatedElement.position?.x !== undefined && updatedElement.position?.y !== undefined),
-             hasValidSize: !!(updatedElement.size?.width !== undefined && updatedElement.size?.height !== undefined)
-           });
-           
-           // Validate the updated element before returning
-           if (!updatedElement.position || typeof updatedElement.position.x !== 'number' || typeof updatedElement.position.y !== 'number') {
-             console.error('❌ Invalid position after update, keeping original:', updatedElement.position);
-             return el; // Return original element if update would break it
-           }
-           
-           if (!updatedElement.size || typeof updatedElement.size.width !== 'number' || typeof updatedElement.size.height !== 'number') {
-             console.error('❌ Invalid size after update, keeping original:', updatedElement.size);
-             return el; // Return original element if update would break it
-           }
-           
-           return updatedElement;
-         }
-         return el;
-       });
-      
-      console.log('🔄 Elements after update:', {
-        oldCount: oldElements.length,
-        newCount: newElements.length,
-        updatedElementExists: newElements.some(el => el.id === elementId)
+      const currentState = latestCanvasStateRef.current;
+      const oldElements = currentState?.elements || [];
+      const newElements = oldElements.map(el => {
+        if (el.id === elementId) {
+          // Deep merge to preserve all properties
+          const updatedElement = {
+            ...el,
+            ...updates,
+            // Ensure position and size are properly merged if they exist
+            position: updates.position ? { ...el.position, ...updates.position } : el.position,
+            size: updates.size ? { ...el.size, ...updates.size } : el.size,
+            styles: updates.styles ? { ...el.styles, ...updates.styles } : el.styles
+          };
+          
+          // Validate only the properties being updated
+          if (updates.position && (typeof updates.position.x !== 'number' || typeof updates.position.y !== 'number')) {
+            console.error('❌ Invalid position update, keeping original:', updates.position);
+            return el; // Return original element if position update is invalid
+          }
+          
+          if (updates.size && (typeof updates.size.width !== 'number' || typeof updates.size.height !== 'number')) {
+            console.error('❌ Invalid size update, keeping original:', updates.size);
+            return el; // Return original element if size update is invalid
+          }
+          
+          return updatedElement;
+        }
+        return el;
       });
       
+      // Return updated canvas state
+      
       return {
-        ...prev,
+        ...currentState,
         elements: newElements
       };
     });
-  }, [setActiveCanvasState, readonly, activeCanvasState?.elements?.length]);
+  }, [setActiveCanvasState, readonly, handleStyleUpdate]);
 
   const handleElementSelect = useCallback((elementId) => {
     if (readonly) return;
@@ -306,30 +365,22 @@ function CanvasEditor({
   }, [setActiveCanvasState, readonly]);
 
   const handleBackgroundChange = useCallback((backgroundImage) => {
-    console.log('🎨 handleBackgroundChange called with:', backgroundImage);
-    console.log('🔍 setActiveCanvasState is:', setActiveCanvasState);
-    console.log('🔍 setActiveCanvasState type:', typeof setActiveCanvasState);
     if (readonly) return;
     
-    console.log('🔧 Setting canvas state with backgroundImage:', backgroundImage);
     setActiveCanvasState(prev => {
-      console.log('📥 Previous canvas state:', prev);
-      
       // Ensure we have a valid previous state
       if (!prev || typeof prev !== 'object') {
         console.error('❌ Previous canvas state is invalid:', prev);
         return prev; // Don't update if prev state is invalid
       }
       
-      const newState = {
+      return {
         ...prev,
         meta: { 
           ...prev.meta, 
           backgroundImage 
         }
       };
-      console.log('📊 New canvas state will be:', newState);
-      return newState;
     });
   }, [setActiveCanvasState, readonly]);
 
@@ -373,19 +424,19 @@ function CanvasEditor({
     });
     
     const customizedAdData = {
-      ...adData,
+      ...(adData || {}),
       // Capture edited text content
-      headline: headlineElement?.content || adData.headline || '',
-      description: descriptionElement?.content || adData.description || '',
-      ctaText: ctaElement?.content || adData.ctaText || 'Shop Now',
+      headline: headlineElement?.content || adData?.headline || '',
+      description: descriptionElement?.content || adData?.description || '',
+      ctaText: ctaElement?.content || adData?.ctaText || 'Shop Now',
       
       // Capture canvas settings
       adSize: activeCanvasState?.meta?.adSize || initialAdSize,
-      backgroundImage: activeCanvasState?.meta?.backgroundImage || adData.backgroundImage,
+      backgroundImage: activeCanvasState?.meta?.backgroundImage || adData?.backgroundImage,
       
       // Capture image updates
-      imageUrl: primaryImage?.content || primaryImage?.src || adData.imageUrl || adData.url,
-      url: primaryImage?.content || primaryImage?.src || adData.url || adData.imageUrl,
+      imageUrl: primaryImage?.content || primaryImage?.src || adData?.imageUrl || adData?.url,
+      url: primaryImage?.content || primaryImage?.src || adData?.url || adData?.imageUrl,
       
       // Include full canvas state for complete editing context
       canvasData: activeCanvasState,
@@ -396,15 +447,19 @@ function CanvasEditor({
       audience: campaignSettings?.audience || {},
       
       // Preserve other original data
-      clickUrl: adData.clickUrl,
-      ctaType: adData.ctaType,
-      product: adData.product,
-      productId: adData.productId,
-      utmData: adData.utmData
+      clickUrl: adData?.clickUrl,
+      ctaType: adData?.ctaType,
+      product: adData?.product,
+      productId: adData?.productId,
+      utmData: adData?.utmData
     };
     
     console.log('🚀 Publishing customized ad data:', customizedAdData);
-    onPublish(customizedAdData);
+    if (onPublish && typeof onPublish === 'function') {
+      onPublish(customizedAdData);
+    } else {
+      console.warn('⚠️ onPublish function not provided to CanvasEditor');
+    }
   }, [activeCanvasState, adData, campaignSettings, onPublish, initialAdSize]);
 
   // Phase 5: Advanced Controls & Interactions handlers

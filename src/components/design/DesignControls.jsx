@@ -476,6 +476,8 @@ function DesignControls({
                         max="72"
                         value={parseInt(selectedElement.styles.fontSize)}
                         onChange={(e) => handleStyleChange('fontSize', `${e.target.value}px`)}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="w-full"
                       />
                       <div className="text-sm text-gray-500 mt-1">{selectedElement.styles.fontSize}</div>
@@ -578,6 +580,8 @@ function DesignControls({
                         max="50"
                         value={parseInt(selectedElement.styles.borderRadius)}
                         onChange={(e) => handleStyleChange('borderRadius', `${e.target.value}px`)}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="w-full"
                       />
                       <div className="text-sm text-gray-500 mt-1">{selectedElement.styles.borderRadius}</div>

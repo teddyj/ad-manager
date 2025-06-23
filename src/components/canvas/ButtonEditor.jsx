@@ -526,6 +526,8 @@ function ButtonEditor({
                 max="50"
                 value={parseInt(customStyles.borderRadius) || 6}
                 onChange={(e) => handleCustomStyleChange('borderRadius', `${e.target.value}px`)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
@@ -558,6 +560,8 @@ function ButtonEditor({
                 max="24"
                 value={parseInt(customStyles.fontSize) || 14}
                 onChange={(e) => handleCustomStyleChange('fontSize', `${e.target.value}px`)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
@@ -659,6 +663,8 @@ function ButtonEditor({
                 step="0.5"
                 value={parseFloat(customStyles.letterSpacing) || 0}
                 onChange={(e) => handleCustomStyleChange('letterSpacing', `${e.target.value}px`)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
