@@ -32,6 +32,14 @@ const AudienceBuilder = ({
     },
     interests: [], // Optional - not required
     behaviors: [], // Optional - not required
+    dietType: {
+      overlay: false,
+      types: [] // Will contain selected diet types: 'plant-based', 'gluten-free', 'lactose-free', 'keto', 'kosher'
+    },
+    retailers: {
+      overlay: false,
+      types: [] // Will contain selected retailers: 'walmart', 'publix', 'target', 'sprouts', 'kroger'
+    },
     customAudience: null,
     estimatedSize: 0,
     platforms: [],
@@ -76,6 +84,24 @@ const AudienceBuilder = ({
     ]
   };
 
+  // Diet type options
+  const dietTypeOptions = [
+    { value: 'plant-based', label: 'Plant-based', icon: '🌱' },
+    { value: 'gluten-free', label: 'Gluten Free', icon: '🚫🌾' },
+    { value: 'lactose-free', label: 'Lactose-Free', icon: '🥛❌' },
+    { value: 'keto', label: 'Keto', icon: '🥑' },
+    { value: 'kosher', label: 'Kosher', icon: '✡️' }
+  ];
+
+  // Retailer options
+  const retailerOptions = [
+    { value: 'walmart', label: 'Walmart', icon: '🛒' },
+    { value: 'publix', label: 'Publix', icon: '🛍️' },
+    { value: 'target', label: 'Target', icon: '🎯' },
+    { value: 'sprouts', label: 'Sprouts', icon: '🌿' },
+    { value: 'kroger', label: 'Kroger', icon: '🏪' }
+  ];
+
   // Calculate estimated audience size with better logic
   const calculateAudienceSize = useMemo(() => {
     let baseSize = 280000000; // US population base
@@ -97,6 +123,18 @@ const AudienceBuilder = ({
     // Behavior targeting further refines
     const behaviorMultiplier = Math.max(0.05, 1 - (audienceData.behaviors.length * 0.2));
     baseSize *= behaviorMultiplier;
+    
+    // Diet type targeting (if overlay is enabled)
+    if (audienceData.dietType.overlay && audienceData.dietType.types.length > 0) {
+      const dietMultiplier = Math.max(0.02, 1 - (audienceData.dietType.types.length * 0.25));
+      baseSize *= dietMultiplier;
+    }
+    
+    // Retailer targeting (if overlay is enabled)
+    if (audienceData.retailers.overlay && audienceData.retailers.types.length > 0) {
+      const retailerMultiplier = Math.max(0.03, 1 - (audienceData.retailers.types.length * 0.2));
+      baseSize *= retailerMultiplier;
+    }
     
     // Income/education targeting
     if (audienceData.demographics.income !== 'any') baseSize *= 0.6;
@@ -141,6 +179,8 @@ const AudienceBuilder = ({
     const hasBasicTargeting = data.template || 
                              data.interests.length > 0 || 
                              data.behaviors.length > 0 || 
+                             (data.dietType.overlay && data.dietType.types.length > 0) ||
+                             (data.retailers.overlay && data.retailers.types.length > 0) ||
                              data.demographics.age[1] - data.demographics.age[0] > 0 ||
                              data.demographics.gender !== 'all' ||
                              data.demographics.income !== 'any' ||
@@ -162,18 +202,18 @@ const AudienceBuilder = ({
 
   // Auto-generate name when targeting changes but name is empty
   useEffect(() => {
-    if (!audienceData.name && (audienceData.template || audienceData.interests.length > 0 || audienceData.behaviors.length > 0)) {
+    if (!audienceData.name && (audienceData.template || audienceData.interests.length > 0 || audienceData.behaviors.length > 0 || (audienceData.dietType.overlay && audienceData.dietType.types.length > 0) || (audienceData.retailers.overlay && audienceData.retailers.types.length > 0))) {
       const autoName = generateAudienceName(audienceData);
       setAudienceData(prev => ({ ...prev, name: autoName }));
     }
-  }, [audienceData.template, audienceData.interests.length, audienceData.behaviors.length]);
+  }, [audienceData.template, audienceData.interests.length, audienceData.behaviors.length, audienceData.dietType.overlay, audienceData.dietType.types.length, audienceData.retailers.overlay, audienceData.retailers.types.length]);
 
   // Update validation when audience data changes
   useEffect(() => {
     const validation = validateAudienceData(audienceData);
     setAudienceData(prev => ({ ...prev, estimatedSize: validation.estimatedSize }));
     onValidationUpdate(validation);
-  }, [audienceData.demographics, audienceData.interests, audienceData.behaviors, audienceData.name]);
+  }, [audienceData.demographics, audienceData.interests, audienceData.behaviors, audienceData.dietType, audienceData.retailers, audienceData.name]);
 
   // Real-time audience estimation
   useEffect(() => {
@@ -183,7 +223,7 @@ const AudienceBuilder = ({
     }, 800);
     
     return () => clearTimeout(timer);
-  }, [audienceData.demographics, audienceData.interests, audienceData.behaviors]);
+  }, [audienceData.demographics, audienceData.interests, audienceData.behaviors, audienceData.dietType, audienceData.retailers]);
 
   // Handle audience data updates
   const handleAudienceUpdate = (updates) => {
@@ -225,26 +265,71 @@ const AudienceBuilder = ({
     const newBehaviors = audienceData.behaviors.includes(behavior)
       ? audienceData.behaviors.filter(b => b !== behavior)
       : [...audienceData.behaviors, behavior];
-    
     handleAudienceUpdate({ behaviors: newBehaviors });
+  };
+
+  // Toggle diet type overlay
+  const toggleDietTypeOverlay = () => {
+    const newDietType = {
+      ...audienceData.dietType,
+      overlay: !audienceData.dietType.overlay,
+      types: !audienceData.dietType.overlay ? [] : audienceData.dietType.types // Clear types when disabling overlay
+    };
+    handleAudienceUpdate({ dietType: newDietType });
+  };
+
+  // Toggle individual diet type
+  const toggleDietType = (dietType) => {
+    const currentTypes = audienceData.dietType.types;
+    const newTypes = currentTypes.includes(dietType)
+      ? currentTypes.filter(type => type !== dietType)
+      : [dietType]; // Only allow one diet type at a time (radio button behavior)
+    
+    handleAudienceUpdate({
+      dietType: { ...audienceData.dietType, types: newTypes }
+    });
+  };
+
+  const toggleRetailersOverlay = () => {
+    const newOverlay = !audienceData.retailers.overlay;
+    handleAudienceUpdate({
+      retailers: {
+        overlay: newOverlay,
+        types: newOverlay ? audienceData.retailers.types : [] // Clear types when disabling
+      }
+    });
+  };
+
+  const toggleRetailer = (retailer) => {
+    const currentTypes = audienceData.retailers.types;
+    const newTypes = currentTypes.includes(retailer)
+      ? currentTypes.filter(type => type !== retailer)
+      : [retailer]; // Only allow one retailer at a time (radio button behavior)
+    
+    handleAudienceUpdate({
+      retailers: { ...audienceData.retailers, types: newTypes }
+    });
   };
 
   // Auto-generate audience name based on targeting
   const generateAudienceName = (data) => {
-    if (data.template) {
-      return audienceTemplates.find(t => t.id === data.template)?.name || 'Custom Audience';
-    }
-    
     const parts = [];
     
-    // Add age range
-    if (data.demographics.age[0] !== 18 || data.demographics.age[1] !== 65) {
-      parts.push(`Ages ${data.demographics.age[0]}-${data.demographics.age[1]}`);
+    // Add age range if customized
+    const ageRange = data.demographics.age[1] - data.demographics.age[0];
+    if (ageRange < 40) {
+      parts.push(`${data.demographics.age[0]}-${data.demographics.age[1]}`);
     }
     
-    // Add gender
+    // Add gender if specific
     if (data.demographics.gender !== 'all') {
       parts.push(data.demographics.gender.charAt(0).toUpperCase() + data.demographics.gender.slice(1));
+    }
+    
+    // Add template name
+    if (data.template) {
+      const template = audienceTemplates.find(t => t.id === data.template);
+      if (template) parts.push(template.name.split(' ')[0]);
     }
     
     // Add top interest
@@ -255,6 +340,16 @@ const AudienceBuilder = ({
     // Add top behavior
     if (data.behaviors.length > 0) {
       parts.push(data.behaviors[0].split(' ')[0]); // First word of behavior
+    }
+    
+    // Add diet type if enabled
+    if (data.dietType.overlay && data.dietType.types.length > 0) {
+      parts.push(data.dietType.types[0].charAt(0).toUpperCase() + data.dietType.types[0].slice(1));
+    }
+    
+    // Add retailer if enabled
+    if (data.retailers.overlay && data.retailers.types.length > 0) {
+      parts.push(data.retailers.types[0].charAt(0).toUpperCase() + data.retailers.types[0].slice(1));
     }
     
     return parts.length > 0 ? parts.slice(0, 3).join(' + ') + ' Audience' : 'Custom Audience';
@@ -323,6 +418,8 @@ const AudienceBuilder = ({
               { id: 'demographics', name: 'Demographics', icon: '👥' },
               { id: 'interests', name: 'Interests', icon: '❤️' },
               { id: 'behaviors', name: 'Behaviors', icon: '📊' },
+              { id: 'dietType', name: 'Diet Type', icon: '🥗' },
+              { id: 'retailers', name: 'Retailers', icon: '🏬' },
               { id: 'locations', name: 'Locations', icon: '📍' }
             ].map((tab) => (
               <button
@@ -576,6 +673,130 @@ const AudienceBuilder = ({
           </div>
         )}
 
+        {activeTab === 'dietType' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Diet Type Targeting</h4>
+              <span className="text-sm text-gray-500">
+                {audienceData.dietType.overlay && audienceData.dietType.types.length > 0 ? 
+                  `${audienceData.dietType.types.length} selected` : 
+                  'Disabled'
+                }
+              </span>
+            </div>
+            
+            {/* Overlay Diet Type Toggle */}
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-medium text-gray-800">Overlay Diet Type</h5>
+                  <p className="text-sm text-gray-500 mt-1">Target users based on their dietary preferences</p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className={`text-sm font-medium ${audienceData.dietType.overlay ? 'text-green-600' : 'text-gray-500'}`}>
+                    {audienceData.dietType.overlay ? 'YES' : 'NO'}
+                  </span>
+                  <button
+                    onClick={toggleDietTypeOverlay}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      audienceData.dietType.overlay ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        audienceData.dietType.overlay ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Diet Type Options */}
+              {audienceData.dietType.overlay && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Select diet types to target:</p>
+                  {dietTypeOptions.map(option => (
+                    <label key={option.value} className="flex items-center">
+                      <input
+                        type="radio"
+                        value={option.value}
+                        checked={audienceData.dietType.types.includes(option.value)}
+                        onChange={() => toggleDietType(option.value)}
+                        className="mr-3 text-blue-600"
+                        name="dietType"
+                      />
+                      <span className="mr-2">{option.icon}</span>
+                      <span className="text-sm">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'retailers' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Specific Retailers</h4>
+              <span className="text-sm text-gray-500">
+                {audienceData.retailers.overlay && audienceData.retailers.types.length > 0 ? 
+                  `${audienceData.retailers.types.length} selected` : 
+                  'Disabled'
+                }
+              </span>
+            </div>
+            
+            {/* Overlay Retailers Toggle */}
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-medium text-gray-800">Specific Retailers</h5>
+                  <p className="text-sm text-gray-500 mt-1">Target users who shop at specific retail stores</p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className={`text-sm font-medium ${audienceData.retailers.overlay ? 'text-green-600' : 'text-gray-500'}`}>
+                    {audienceData.retailers.overlay ? 'YES' : 'NO'}
+                  </span>
+                  <button
+                    onClick={toggleRetailersOverlay}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      audienceData.retailers.overlay ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        audienceData.retailers.overlay ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Retailer Options */}
+              {audienceData.retailers.overlay && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Select retailers to target:</p>
+                  {retailerOptions.map(option => (
+                    <label key={option.value} className="flex items-center">
+                      <input
+                        type="radio"
+                        value={option.value}
+                        checked={audienceData.retailers.types.includes(option.value)}
+                        onChange={() => toggleRetailer(option.value)}
+                        className="mr-3 text-blue-600"
+                        name="retailer"
+                      />
+                      <span className="mr-2">{option.icon}</span>
+                      <span className="text-sm">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'locations' && (
           <div className="space-y-6">
             <div>
@@ -613,7 +834,7 @@ const AudienceBuilder = ({
       <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-6">
         <h4 className="font-medium text-green-800 mb-4">Audience Summary</h4>
         
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div className="text-center p-3 bg-white rounded-md border">
             <p className="text-2xl font-bold text-green-600">{(calculateAudienceSize / 1000000).toFixed(1)}M</p>
             <p className="text-sm text-gray-600">Estimated Reach</p>
@@ -631,6 +852,20 @@ const AudienceBuilder = ({
           
           <div className="text-center p-3 bg-white rounded-md border">
             <p className="text-2xl font-bold text-orange-600">
+              {audienceData.dietType.overlay ? audienceData.dietType.types.length : 0}
+            </p>
+            <p className="text-sm text-gray-600">Diet Types</p>
+          </div>
+          
+          <div className="text-center p-3 bg-white rounded-md border">
+            <p className="text-2xl font-bold text-teal-600">
+              {audienceData.retailers.overlay ? audienceData.retailers.types.length : 0}
+            </p>
+            <p className="text-sm text-gray-600">Retailers</p>
+          </div>
+          
+          <div className="text-center p-3 bg-white rounded-md border">
+            <p className="text-2xl font-bold text-indigo-600">
               {audienceData.demographics.age[1] - audienceData.demographics.age[0]}
             </p>
             <p className="text-sm text-gray-600">Age Range</p>

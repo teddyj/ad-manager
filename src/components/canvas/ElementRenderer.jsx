@@ -123,10 +123,46 @@ function ElementRenderer({
                 alt="Product"
                 className="w-full h-full object-contain"
                 draggable={false}
+                onError={(e) => {
+                  console.warn('🖼️ Product element image failed to load:', {
+                    elementId: element.id,
+                    imageUrl: element.content,
+                    urlType: element.content.startsWith('data:') ? 'base64' : 
+                             element.content.startsWith('blob:') ? 'blob' : 
+                             element.content.startsWith('http') ? 'http' : 'unknown',
+                    error: e
+                  });
+                  // Replace failed image with placeholder
+                  e.target.style.display = 'none';
+                  const container = e.target.parentNode;
+                  container.style.backgroundColor = '#f3f4f6';
+                  container.style.display = 'flex';
+                  container.style.flexDirection = 'column';
+                  container.style.alignItems = 'center';
+                  container.style.justifyContent = 'center';
+                  container.innerHTML = `
+                    <div style="color: #6b7280; text-align: center; padding: 8px;">
+                      <div style="font-size: 20px; margin-bottom: 4px;">📦</div>
+                      <div style="font-size: 10px; font-weight: 500;">Product Image</div>
+                      <div style="font-size: 8px; opacity: 0.7; margin-top: 2px;">Failed to load</div>
+                    </div>
+                  `;
+                }}
+                onLoad={() => {
+                  console.log('✅ Product element image loaded:', {
+                    elementId: element.id,
+                    imageUrl: element.content,
+                    urlType: element.content.startsWith('data:') ? 'base64' : 
+                             element.content.startsWith('blob:') ? 'blob' : 
+                             element.content.startsWith('http') ? 'http' : 'unknown'
+                  });
+                }}
               />
             ) : (
-              <div className="w-full h-full bg-blue-50 flex items-center justify-center text-blue-500 text-xs">
-                Product
+              <div className="w-full h-full bg-blue-50 flex flex-col items-center justify-center text-blue-500 text-xs">
+                <div className="text-lg mb-1">📦</div>
+                <div>Product</div>
+                <div className="text-xs opacity-70 mt-1">No image</div>
               </div>
             )}
           </div>

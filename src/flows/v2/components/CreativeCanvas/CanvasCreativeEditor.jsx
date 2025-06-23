@@ -159,12 +159,23 @@ const CreativePreview = ({ canvasState, format, scale = 0.5, creative }) => {
             draggable={false}
             onError={(e) => {
               // Replace with placeholder if image fails to load
+              console.warn('🖼️ Product image failed to load:', extractedContent.productImage);
               e.target.style.display = 'none';
-              e.target.parentNode.style.backgroundColor = '#f3f4f6';
-              e.target.parentNode.style.display = 'flex';
-              e.target.parentNode.style.alignItems = 'center';
-              e.target.parentNode.style.justifyContent = 'center';
-              e.target.parentNode.innerHTML = '<div style="color: #6b7280; font-size: 12px;">Product Image</div>';
+              const container = e.target.parentNode;
+              container.style.backgroundColor = '#f3f4f6';
+              container.style.display = 'flex';
+              container.style.alignItems = 'center';
+              container.style.justifyContent = 'center';
+              container.innerHTML = `
+                <div style="color: #6b7280; font-size: 12px; text-align: center; padding: 8px;">
+                  <div style="font-size: 24px; margin-bottom: 4px;">📦</div>
+                  <div>Product Image</div>
+                  <div style="font-size: 10px; opacity: 0.7; margin-top: 2px;">Image not available</div>
+                </div>
+              `;
+            }}
+            onLoad={() => {
+              console.log('✅ Product image loaded successfully:', extractedContent.productImage);
             }}
           />
         </div>
