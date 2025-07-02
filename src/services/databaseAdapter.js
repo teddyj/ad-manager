@@ -1,6 +1,19 @@
 import { legacyCompatibility } from './legacyCompatibility.js'
-import { db } from './database.js'
 import { FEATURES, isDatabaseAvailable } from '../config/features.js'
+
+// Use browser-safe database service
+let dbService = null
+const getDbService = async () => {
+  if (!dbService) {
+    try {
+      const { db } = await import('./database.browser.js')
+      dbService = db
+    } catch (error) {
+      console.log('ℹ️ Database service not available:', error.message)
+    }
+  }
+  return dbService
+}
 
 /**
  * Database Adapter Service
@@ -353,6 +366,8 @@ class DatabaseAdapter {
       
       if (!response.ok) {
         if (response.status === 404) {
+          // This is expected for new campaigns - no existing draft
+          console.log(`ℹ️ No existing draft found for ${campaignId} (this is normal for new campaigns)`)
           return null // No draft found
         }
         throw new Error(`HTTP error! status: ${response.status}`)

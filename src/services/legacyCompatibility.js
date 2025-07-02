@@ -1,13 +1,28 @@
-import { db } from './database.js'
-
 /**
  * Legacy Compatibility Service
  * Provides backward compatibility between localStorage operations and database operations
  * Transforms data formats between legacy and new schema
  */
 export class LegacyCompatibilityService {
-  constructor(databaseService = db) {
-    this.db = databaseService
+  constructor() {
+    // Use browser-safe database service that doesn't import Prisma
+    this.dbPromise = null
+  }
+
+  async getDatabase() {
+    if (!this.dbPromise) {
+      this.dbPromise = (async () => {
+        try {
+          // Use browser-safe database service
+          const { db } = await import('./database.browser.js')
+          return db
+        } catch (error) {
+          console.log('ℹ️ Database service not available:', error.message)
+          return null
+        }
+      })()
+    }
+    return this.dbPromise
   }
 
   // ======================
@@ -70,11 +85,35 @@ export class LegacyCompatibilityService {
         return { success: false, error: 'API call failed' }
       }
       
-      // Server-side: Transform legacy adData to new campaign format
-      const campaignData = this.transformLegacyToCampaign(adData)
+      // Server-side: Use same HTTP API approach as client-side
+      console.log('🌐 Using HTTP API for campaign save (server-side)')
       
-      // Create campaign in database
-      const result = await this.db.createCampaign(campaignData)
+      // Generate campaign ID and prepare data
+      const campaignId = `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      // Create campaign object for API
+      const campaignData = {
+        id: campaignId,
+        name: adData.campaignName || adData.name || 'Untitled Campaign',
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        adData: adData
+      }
+      
+      // Make HTTP request to backend API
+      const response = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(campaignData)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
       
       if (result.success) {
         // Transform back to legacy format for compatibility
@@ -93,77 +132,49 @@ export class LegacyCompatibilityService {
    * Legacy getCampaigns operation - returns campaigns in legacy format
    */
   async getCampaigns() {
-    // Check if we're on client side - if so, combine localStorage + API data
-    if (typeof window !== 'undefined') {
-      console.log('📊 Client-side detected, using localStorage + API for campaigns')
-      
-      try {
-        // Get localStorage campaigns
-        const localCampaigns = this.getLocalStorageData('campaigns') || []
-        const savedCampaigns = this.getLocalStorageData('saved_campaigns') || []
-        
-                 // Get campaigns saved via API
-         let apiCampaigns = []
-         try {
-           const response = await fetch('/api/campaigns')
-           if (response.ok) {
-             const result = await response.json()
-             if (result.success && result.campaigns) {
-               apiCampaigns = result.campaigns.map(campaign => ({
-                 id: campaign.id,
-                 name: campaign.name,
-                 status: campaign.status || 'Draft',
-                 info: true,
-                 created: new Date(campaign.createdAt || campaign.savedAt).toLocaleDateString(),
-                 type: 'Campaign Flow V2',
-                 budget: '$0.00',
-                 starts: 'Not Set',
-                 ends: 'Not Set',
-                 adData: campaign.adData || campaign
-               }))
-             }
-           }
-         } catch (apiError) {
-           console.warn('⚠️ Could not fetch API campaigns:', apiError)
-         }
-        
-        // Combine all campaign sources
-        const allCampaigns = [
-          ...localCampaigns,
-          ...savedCampaigns,
-          ...apiCampaigns
-        ]
-        
-        return allCampaigns
-      } catch (error) {
-        console.error('❌ Failed to get campaigns:', error)
-        return []
-      }
-    }
-
+    console.log('📊 Using unified approach: localStorage + API for campaigns')
+    
     try {
-      const campaigns = await this.db.getCampaigns()
+      // Get localStorage campaigns
+      const localCampaigns = this.getLocalStorageData('campaigns') || []
+      const savedCampaigns = this.getLocalStorageData('saved_campaigns') || []
       
-      // Transform to legacy format
-      const legacyCampaigns = campaigns.map(campaign => 
-        this.transformCampaignToLegacy(campaign)
-      )
+      // Get campaigns saved via API
+      let apiCampaigns = []
+      try {
+        const response = await fetch('/api/campaigns')
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && result.campaigns) {
+            apiCampaigns = result.campaigns.map(campaign => ({
+              id: campaign.id,
+              name: campaign.name,
+              status: campaign.status || 'Draft',
+              info: true,
+              created: new Date(campaign.createdAt || campaign.savedAt).toLocaleDateString(),
+              type: 'Campaign Flow V2',
+              budget: '$0.00',
+              starts: 'Not Set',
+              ends: 'Not Set',
+              adData: campaign.adData || campaign
+            }))
+          }
+        }
+      } catch (apiError) {
+        console.warn('⚠️ Could not fetch API campaigns:', apiError)
+      }
       
-      return legacyCampaigns
-    } catch (error) {
-      console.log('🔄 Database unavailable, falling back to localStorage...')
-      
-      // Fallback to localStorage
-      const localCampaigns = this.getLocalStorageData('campaigns')
-      const savedCampaigns = this.getLocalStorageData('saved_campaigns')
-      
-      // Combine both campaign sources
+      // Combine all campaign sources
       const allCampaigns = [
-        ...(localCampaigns || []),
-        ...(savedCampaigns || [])
+        ...localCampaigns,
+        ...savedCampaigns,
+        ...apiCampaigns
       ]
       
       return allCampaigns
+    } catch (error) {
+      console.error('❌ Failed to get campaigns:', error)
+      return []
     }
   }
 
@@ -583,8 +594,13 @@ export class LegacyCompatibilityService {
   /**
    * Check if database is available for operations
    */
-  isDatabaseAvailable() {
-    return this.db && this.db.isAvailable()
+  async isDatabaseAvailable() {
+    try {
+      const db = await this.getDatabase()
+      return db && db.isAvailable()
+    } catch (error) {
+      return false
+    }
   }
 
   /**

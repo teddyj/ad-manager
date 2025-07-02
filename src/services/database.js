@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { PrismaClient } from '@prisma/client'
 
 /**
  * Database Service for Campaign Builder Application
@@ -13,7 +12,7 @@ class DatabaseService {
     this.initializeClients()
   }
 
-  initializeClients() {
+  async initializeClients() {
     try {
       // Initialize Supabase client
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -33,10 +32,16 @@ class DatabaseService {
 
       // Initialize Prisma client (server-side only)
       if (typeof window === 'undefined') {
-        this.prisma = new PrismaClient({
-          log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
-        })
-        console.log('✅ Prisma client initialized')
+        try {
+          // Dynamically import Prisma only on server-side
+          const { PrismaClient } = await import('@prisma/client')
+          this.prisma = new PrismaClient({
+            log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
+          })
+          console.log('✅ Prisma client initialized')
+        } catch (prismaError) {
+          console.log('ℹ️ Prisma not available in browser environment')
+        }
       }
 
       this.initialized = true
