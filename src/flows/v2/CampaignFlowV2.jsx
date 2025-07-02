@@ -102,13 +102,7 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
   // Debug/diagnostics panel
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   
-  // Check if new flow is enabled
-  useEffect(() => {
-    if (!isFeatureEnabled('NEW_CAMPAIGN_FLOW')) {
-      console.warn('Campaign Flow V2 is not enabled. Redirecting to legacy flow.');
-      onCancel?.();
-    }
-  }, [onCancel]);
+  // Note: Feature flag check is now handled at the App level
 
   // Browser history management for Campaign Flow V2
   const updateUrlFragment = useCallback((stepIndex) => {
@@ -284,88 +278,50 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
         updatedAt: new Date().toISOString()
       };
       
-      // Optimized save to localStorage (non-blocking)
+      // Auto-save using database adapter (non-blocking)
       setTimeout(async () => {
         try {
           setSaveStatus('saving');
           
-          // Check current storage usage first
-          const storageInfo = getStorageUsage();
-          if (storageInfo.critical) {
-            console.warn('🚨 Storage usage critical, cleaning up first...');
-            cleanupOldDrafts();
-          }
+          // Use database adapter for saving
+          const result = await dbOperations.saveCampaignDraft(campaignData.id, updatedCampaignData);
           
-          // Optimize data before saving
-          const optimizedData = optimizeForStorage(updatedCampaignData);
-          
-          // Check if data fits in localStorage
-          const dataString = JSON.stringify(optimizedData);
-          const dataSize = new Blob([dataString]).size;
-          
-          // If data is too large (approaching 3MB limit), use selective saving
-          if (dataSize > 3 * 1024 * 1024) { // Reduced from 4MB to 3MB
-            console.warn('📊 Data size large, using selective save:', {
-              sizeKB: Math.round(dataSize / 1024),
-              threshold: '3MB',
-              storageUsage: `${storageInfo.usagePercent}%`
+          if (result.success) {
+            setSaveStatus('saved');
+            console.log('📁 Auto-saved campaign data to database:', {
+              stepId,
+              campaignId: campaignData.id,
+              hasCreatives: !!updatedCampaignData.creative?.creatives,
+              creativesCount: Object.keys(updatedCampaignData.creative?.creatives || {}).length,
+              autoSavedAt: result.draft?.autoSavedAt
             });
-            
-            // Save only essential data
-            const essentialData = {
-              id: optimizedData.id,
-              createdAt: optimizedData.createdAt,
-              updatedAt: optimizedData.updatedAt,
-              product: optimizedData.product,
-              audience: optimizedData.audience,
-              platforms: optimizedData.platforms,
-              creative: optimizeCreativeData(optimizedData.creative),
-              publish: optimizedData.publish
-            };
-            
-            localStorage.setItem(`campaign_draft_${campaignData.id}`, JSON.stringify(essentialData));
           } else {
-            localStorage.setItem(`campaign_draft_${campaignData.id}`, dataString);
+            throw new Error(result.error || 'Failed to save draft');
           }
-          
-          setSaveStatus('saved');
-          console.log('📁 Auto-saved campaign data:', {
-            stepId,
-            campaignId: campaignData.id,
-            dataSizeKB: Math.round(dataSize / 1024),
-            hasCreatives: !!optimizedData.creative?.creatives,
-            creativesCount: Object.keys(optimizedData.creative?.creatives || {}).length,
-            storageUsage: `${storageInfo.usagePercent}%`
-          });
         } catch (error) {
           console.warn('Failed to auto-save campaign data:', error);
           setSaveStatus('error');
           
-          // Enhanced error handling for quota exceeded
-          if (error.name === 'QuotaExceededError') {
-            const recoveryResult = await handleStorageQuotaError(campaignData, stepId, data);
-            if (recoveryResult.success) {
-              setSaveStatus(recoveryResult.type === 'minimal' ? 'saved-minimal' : 'saved-recovery');
-              console.log(`✅ Recovery save successful (${recoveryResult.type})`);
-            } else {
-              setSaveStatus('error-quota');
-              console.error('❌ All save attempts failed:', recoveryResult.error);
-            }
-          } else {
-            // Try emergency save with minimal data for other errors
+          // Try emergency save with minimal data
+          try {
+            const minimalData = {
+              id: campaignData.id,
+              updatedAt: new Date().toISOString(),
+              [stepId]: data
+            };
+            
+            // Try to save minimal data to database, fallback to localStorage
             try {
-              const minimalData = {
-                id: campaignData.id,
-                updatedAt: new Date().toISOString(),
-                [stepId]: data
-              };
-              localStorage.setItem(`campaign_minimal_${campaignData.id}`, JSON.stringify(minimalData));
+              await dbOperations.saveCampaignDraft(`${campaignData.id}_minimal`, minimalData);
               setSaveStatus('saved-minimal');
-              console.log('💾 Emergency minimal save completed');
-            } catch (emergencyError) {
-              console.error('Emergency save also failed:', emergencyError);
+              console.log('💾 Emergency minimal save completed (database)');
+            } catch (dbError) {
+              console.warn('Database emergency save failed, but localStorage fallback removed to prevent quota errors');
               setSaveStatus('error');
             }
+          } catch (emergencyError) {
+            console.error('Emergency save also failed:', emergencyError);
+            setSaveStatus('error');
           }
         }
       }, 100);
@@ -381,260 +337,9 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     });
   }, [campaignData]);
   
-  // Data optimization functions
-  const optimizeForStorage = (data) => {
-    // Create a deep copy to avoid mutating original data
-    const optimized = JSON.parse(JSON.stringify(data));
-    
-    // Remove non-essential data
-    if (optimized.creative?.creatives) {
-      Object.keys(optimized.creative.creatives).forEach(creativeId => {
-        const creative = optimized.creative.creatives[creativeId];
-        
-        // Remove temporary/preview data
-        if (creative.previewData) delete creative.previewData;
-        if (creative.temporaryState) delete creative.temporaryState;
-        
-        // Optimize element data
-        if (creative.elements) {
-          creative.elements = creative.elements.map(element => {
-            const optimizedElement = {
-              ...element,
-              // Keep only essential properties, remove computed/cached data
-              ...(element.computed && { computed: undefined }),
-              ...(element.cached && { cached: undefined })
-            };
-            
-            // Optimize image content - replace base64 with placeholders in storage
-            if (element.type === 'image' || element.type === 'product') {
-              if (element.content && element.content.startsWith('data:')) {
-                // Store image metadata instead of full base64
-                optimizedElement.content = '[IMAGE_DATA_PLACEHOLDER]';
-                optimizedElement.imageMetadata = {
-                  hasImage: true,
-                  type: element.content.substring(5, element.content.indexOf(';')),
-                  size: element.content.length
-                };
-              }
-            }
-            
-            return optimizedElement;
-          });
-        }
-      });
-    }
-    
-    // Optimize product data - remove large image data
-    if (optimized.product?.images) {
-      optimized.product.images = optimized.product.images.map(img => ({
-        ...img,
-        // Replace base64 URLs with placeholders to save space
-        url: img.url && img.url.startsWith('data:') ? '[IMAGE_DATA_PLACEHOLDER]' : img.url,
-        originalUrl: img.originalUrl && img.originalUrl.startsWith('blob:') ? '[BLOB_URL_PLACEHOLDER]' : img.originalUrl,
-        processedUrl: img.processedUrl && img.processedUrl.startsWith('data:') ? '[IMAGE_DATA_PLACEHOLDER]' : img.processedUrl,
-        thumbnailUrl: img.thumbnailUrl && img.thumbnailUrl.startsWith('data:') ? '[IMAGE_DATA_PLACEHOLDER]' : img.thumbnailUrl
-      }));
-    }
-    
-    return optimized;
-  };
-
-  const optimizeCreativeData = (creativeData) => {
-    if (!creativeData?.creatives) return creativeData;
-    
-    const optimized = { ...creativeData };
-    const creatives = {};
-    
-    // Keep only the most recent 2 creatives to save space (reduced from 3)
-    const sortedCreatives = Object.entries(creativeData.creatives)
-      .sort(([,a], [,b]) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
-      .slice(0, 2);
-    
-    sortedCreatives.forEach(([id, creative]) => {
-      creatives[id] = {
-        id: creative.id,
-        formatId: creative.formatId,
-        elements: creative.elements?.slice(0, 5) || [], // Further limit elements to 5
-        updatedAt: creative.updatedAt,
-        // Keep only essential properties
-        ...(creative.selectedFormat && { selectedFormat: creative.selectedFormat })
-      };
-      
-      // Remove image content from elements in storage
-      if (creatives[id].elements) {
-        creatives[id].elements = creatives[id].elements.map(el => {
-          if ((el.type === 'image' || el.type === 'product') && el.content && el.content.startsWith('data:')) {
-            return {
-              ...el,
-              content: '[IMAGE_DATA_PLACEHOLDER]',
-              imageMetadata: {
-                hasImage: true,
-                type: el.content.substring(5, el.content.indexOf(';')),
-                originalSize: el.content.length
-              }
-            };
-          }
-          return el;
-        });
-      }
-    });
-    
-    optimized.creatives = creatives;
-    return optimized;
-  };
+  // Note: Data optimization functions removed since database can handle larger data efficiently
   
-  // Enhanced storage cleanup and monitoring
-  const cleanupOldDrafts = () => {
-    try {
-      const keys = Object.keys(localStorage);
-      const now = new Date();
-      let cleanedCount = 0;
-      let reclaimedSize = 0;
-      
-      keys.forEach(key => {
-        if (key.startsWith('campaign_draft_') || key.startsWith('campaign_minimal_')) {
-          try {
-            const data = localStorage.getItem(key);
-            const parsed = JSON.parse(data);
-            const updatedAt = new Date(parsed.updatedAt);
-            const daysSinceUpdate = (now - updatedAt) / (1000 * 60 * 60 * 24);
-            
-            // Remove drafts older than 3 days (reduced from 7)
-            if (daysSinceUpdate > 3) {
-              reclaimedSize += data.length;
-              localStorage.removeItem(key);
-              cleanedCount++;
-            }
-          } catch (e) {
-            // Remove corrupted entries
-            const data = localStorage.getItem(key);
-            if (data) reclaimedSize += data.length;
-            localStorage.removeItem(key);
-            cleanedCount++;
-          }
-        }
-      });
-      
-      if (cleanedCount > 0) {
-        console.log(`🧹 Cleaned up ${cleanedCount} old draft entries, reclaimed ${Math.round(reclaimedSize / 1024)}KB`);
-      }
-      
-      return { cleanedCount, reclaimedSize };
-    } catch (error) {
-      console.warn('Failed to cleanup old drafts:', error);
-      return { cleanedCount: 0, reclaimedSize: 0 };
-    }
-  };
-
-  const getStorageUsage = () => {
-    try {
-      let totalSize = 0;
-      let campaignDraftSize = 0;
-      let campaignDraftCount = 0;
-      
-      Object.keys(localStorage).forEach(key => {
-        const itemSize = localStorage.getItem(key).length;
-        totalSize += itemSize;
-        
-        if (key.startsWith('campaign_draft_') || key.startsWith('campaign_minimal_')) {
-          campaignDraftSize += itemSize;
-          campaignDraftCount++;
-        }
-      });
-      
-      const maxSize = 5 * 1024 * 1024; // 5MB limit
-      const usagePercent = Math.round((totalSize / maxSize) * 100);
-      
-      return {
-        totalSizeKB: Math.round(totalSize / 1024),
-        campaignDraftSizeKB: Math.round(campaignDraftSize / 1024),
-        campaignDraftCount,
-        usagePercent,
-        approaching: usagePercent > 70, // Lower threshold for better UX
-        critical: usagePercent > 90
-      };
-    } catch (error) {
-      return { 
-        totalSizeKB: 0, 
-        campaignDraftSizeKB: 0,
-        campaignDraftCount: 0,
-        usagePercent: 0, 
-        approaching: false,
-        critical: false 
-      };
-    }
-  };
-  
-  // Enhanced emergency storage management
-  const handleStorageQuotaError = async (campaignData, stepId, data) => {
-    console.warn('🚨 Storage quota exceeded, attempting recovery...');
-    
-    // Step 1: Clean up old drafts
-    const cleanup = cleanupOldDrafts();
-    
-    // Step 2: Try minimal essential data save
-    try {
-      const minimalData = {
-        id: campaignData.id,
-        updatedAt: new Date().toISOString(),
-        // Only save the most critical current step data
-        [stepId]: {
-          // Extract only non-image data for most steps
-          ...(stepId === 'product' && data?.name && { 
-            name: data.name,
-            category: data.category,
-            brand: data.brand,
-            imageCount: data?.images?.length || 0
-          }),
-          ...(stepId === 'audience' && data && { 
-            ...data 
-          }),
-          ...(stepId === 'platforms' && data && { 
-            selectedPlatforms: data.selectedPlatforms?.map(p => p.id) || [],
-            count: data.selectedPlatforms?.length || 0
-          }),
-          ...(stepId === 'creative' && data && { 
-            selectedFormats: data.selectedFormats || [],
-            creativesCount: Object.keys(data.creatives || {}).length,
-            lastGenerated: data.lastGenerated
-          }),
-          ...(stepId === 'publish' && data && { 
-            ...data 
-          })
-        }
-      };
-      
-      localStorage.setItem(`campaign_minimal_${campaignData.id}`, JSON.stringify(minimalData));
-      console.log('💾 Emergency minimal save completed:', {
-        stepId,
-        dataSizeKB: Math.round(JSON.stringify(minimalData).length / 1024),
-        cleanedItems: cleanup.cleanedCount,
-        reclaimedKB: Math.round(cleanup.reclaimedSize / 1024)
-      });
-      
-      return { success: true, type: 'minimal' };
-    } catch (emergencyError) {
-      console.error('💥 Emergency save failed:', emergencyError);
-      
-      // Step 3: Last resort - store only step ID and timestamp
-      try {
-        const lastResortData = {
-          id: campaignData.id,
-          updatedAt: new Date().toISOString(),
-          lastStep: stepId,
-          stepTimestamp: Date.now()
-        };
-        
-        localStorage.setItem(`campaign_recovery_${campaignData.id}`, JSON.stringify(lastResortData));
-        console.log('🆘 Last resort recovery save completed');
-        
-        return { success: true, type: 'recovery' };
-      } catch (lastResortError) {
-        console.error('💀 All save attempts failed:', lastResortError);
-        return { success: false, error: 'Storage completely exhausted' };
-      }
-    }
-  };
+  // Note: Storage management functions removed since database handles persistence efficiently
   
   const updateStepValidation = useCallback((stepId, validation) => {
     setStepValidation(prev => ({
@@ -645,71 +350,92 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
   
   // Load saved draft data on component mount
   useEffect(() => {
-    const loadSavedDraft = () => {
+    const loadSavedDraft = async () => {
       try {
-        // Cleanup old drafts first
-        cleanupOldDrafts();
+        // Try to load draft from database first
+        const savedDraft = await dbOperations.getCampaignDraft(campaignData.id);
         
-        // Check storage usage
-        const storageInfo = getStorageUsage();
-        if (storageInfo.approaching) {
-          console.warn('⚠️ LocalStorage approaching limit:', storageInfo);
-        }
-        
-        // Try to load full draft first
-        let parsedDraft = null;
-        const savedDraft = localStorage.getItem(`campaign_draft_${campaignData.id}`);
-        
-        if (savedDraft) {
-          parsedDraft = JSON.parse(savedDraft);
-        } else {
-          // Fallback to minimal draft if full draft doesn't exist
-          const minimalDraft = localStorage.getItem(`campaign_minimal_${campaignData.id}`);
-          if (minimalDraft) {
-            parsedDraft = JSON.parse(minimalDraft);
-            console.log('📂 Loading minimal campaign draft');
-          }
-        }
-        
-        if (parsedDraft) {
-          console.log('📂 Loading saved campaign draft:', {
+        if (savedDraft && savedDraft.stepData) {
+          console.log('📂 Loading saved campaign draft from database:', {
             campaignId: campaignData.id,
-            lastUpdated: parsedDraft.updatedAt,
-            hasCreativeStep: !!parsedDraft.creative,
-            creativesCount: Object.keys(parsedDraft.creative?.creatives || {}).length,
-            storageUsage: `${storageInfo.totalSizeKB}KB (${storageInfo.usagePercent}%)`
+            lastUpdated: savedDraft.autoSavedAt,
+            hasCreativeStep: !!savedDraft.stepData.creative,
+            creativesCount: Object.keys(savedDraft.stepData.creative?.creatives || {}).length
           });
           
           // Restore step data from draft
           setStepData({
-            product: parsedDraft.product || null,
-            audience: parsedDraft.audience || null,
-            platforms: parsedDraft.platforms || [],
-            creative: parsedDraft.creative || {},
-            publish: parsedDraft.publish || null
+            product: savedDraft.stepData.product || null,
+            audience: savedDraft.stepData.audience || null,
+            platforms: savedDraft.stepData.platforms || [],
+            creative: savedDraft.stepData.creative || {},
+            publish: savedDraft.stepData.publish || null
           });
           
           // Update campaign data
           setCampaignData(prev => ({
             ...prev,
-            ...parsedDraft,
+            ...savedDraft.stepData,
             // Preserve the original ID and creation time
             id: prev.id,
             createdAt: prev.createdAt
           }));
+        } else {
+          // Fallback: try to load from minimal draft
+          try {
+            const minimalDraft = await dbOperations.getCampaignDraft(`${campaignData.id}_minimal`);
+            if (minimalDraft && minimalDraft.stepData) {
+              console.log('📂 Loading minimal campaign draft from database');
+              setStepData(prev => ({ ...prev, ...minimalDraft.stepData }));
+            } else {
+              // Final fallback: check localStorage for legacy drafts
+              const localDraft = localStorage.getItem(`campaign_draft_${campaignData.id}`);
+              if (localDraft) {
+                const parsedDraft = JSON.parse(localDraft);
+                console.log('📂 Loading legacy draft from localStorage');
+                setStepData({
+                  product: parsedDraft.product || null,
+                  audience: parsedDraft.audience || null,
+                  platforms: parsedDraft.platforms || [],
+                  creative: parsedDraft.creative || {},
+                  publish: parsedDraft.publish || null
+                });
+                setCampaignData(prev => ({
+                  ...prev,
+                  ...parsedDraft,
+                  id: prev.id,
+                  createdAt: prev.createdAt
+                }));
+              }
+            }
+          } catch (minimalError) {
+            console.warn('Failed to load minimal draft:', minimalError);
+          }
         }
       } catch (error) {
         console.warn('Failed to load saved campaign draft:', error);
-        // Try to recover from minimal save
+        // Final fallback to localStorage
         try {
-          const minimalDraft = localStorage.getItem(`campaign_minimal_${campaignData.id}`);
-          if (minimalDraft) {
-            const parsedMinimal = JSON.parse(minimalDraft);
-            console.log('🆘 Recovered from minimal draft');
+          const localDraft = localStorage.getItem(`campaign_draft_${campaignData.id}`);
+          const minimalLocalDraft = localStorage.getItem(`campaign_minimal_${campaignData.id}`);
+          
+          if (localDraft) {
+            const parsedDraft = JSON.parse(localDraft);
+            console.log('🆘 Recovered from localStorage draft');
+            setStepData({
+              product: parsedDraft.product || null,
+              audience: parsedDraft.audience || null,
+              platforms: parsedDraft.platforms || [],
+              creative: parsedDraft.creative || {},
+              publish: parsedDraft.publish || null
+            });
+          } else if (minimalLocalDraft) {
+            const parsedMinimal = JSON.parse(minimalLocalDraft);
+            console.log('🆘 Recovered from minimal localStorage draft');
             setStepData(prev => ({ ...prev, ...parsedMinimal }));
           }
         } catch (recoveryError) {
-          console.error('Failed to recover from minimal draft:', recoveryError);
+          console.error('Failed to recover from localStorage:', recoveryError);
         }
       }
     };
@@ -755,16 +481,36 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     }
   };
   
-  // Save campaign data (placeholder)
+  // Save campaign data using database adapter
   const saveCampaignData = async (data) => {
-    // TODO: Implement actual data persistence
-    console.log('Saving campaign data:', data);
+    console.log('Saving final campaign data:', data);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // In real implementation, this would save to database/API
-    localStorage.setItem(`campaign_${data.id}`, JSON.stringify(data));
+    try {
+      // Save the completed campaign using the database adapter
+      const result = await dbOperations.saveAd(data);
+      
+      if (result.success) {
+        console.log('✅ Campaign saved successfully to database');
+        
+        // Clean up the draft after successful save
+        try {
+          await dbOperations.deleteCampaignDraft(data.id);
+          await dbOperations.deleteCampaignDraft(`${data.id}_minimal`);
+          localStorage.removeItem(`campaign_draft_${data.id}`);
+          localStorage.removeItem(`campaign_minimal_${data.id}`);
+          console.log('🧹 Cleaned up draft after successful save');
+        } catch (cleanupError) {
+          console.warn('Failed to clean up draft:', cleanupError);
+        }
+        
+        return result;
+      } else {
+        throw new Error(result.error || 'Failed to save campaign');
+      }
+    } catch (error) {
+      console.error('❌ Failed to save campaign:', error);
+      throw error;
+    }
   };
   
   // Manual save function
@@ -777,29 +523,40 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
         updatedAt: new Date().toISOString()
       };
       
-      localStorage.setItem(`campaign_draft_${campaignData.id}`, JSON.stringify(finalCampaignData));
-      setSaveStatus('saved');
+      const result = await dbOperations.saveCampaignDraft(campaignData.id, finalCampaignData);
       
-      console.log('💾 Manual save completed:', {
-        campaignId: campaignData.id,
-        stepsWithData: Object.keys(stepData).filter(key => stepData[key])
-      });
+      if (result.success) {
+        setSaveStatus('saved');
+        console.log('💾 Manual save completed:', {
+          campaignId: campaignData.id,
+          stepsWithData: Object.keys(stepData).filter(key => stepData[key])
+        });
+      } else {
+        throw new Error(result.error || 'Failed to save manually');
+      }
     } catch (error) {
       console.error('Manual save failed:', error);
       setSaveStatus('error');
     }
-  }, [campaignData, stepData]);
+  }, [campaignData, stepData, dbOperations]);
   
   // Clear draft function (for development/testing)
-  const handleClearDraft = useCallback(() => {
+  const handleClearDraft = useCallback(async () => {
     try {
+      // Clear from database
+      await dbOperations.deleteCampaignDraft(campaignData.id);
+      // Clear minimal draft too
+      await dbOperations.deleteCampaignDraft(`${campaignData.id}_minimal`);
+      // Clear any legacy localStorage entries
       localStorage.removeItem(`campaign_draft_${campaignData.id}`);
+      localStorage.removeItem(`campaign_minimal_${campaignData.id}`);
+      
       console.log('🗑️ Cleared draft for campaign:', campaignData.id);
       alert('Draft cleared! Refresh the page to start fresh.');
     } catch (error) {
       console.error('Failed to clear draft:', error);
     }
-  }, [campaignData.id]);
+  }, [campaignData.id, dbOperations]);
   
   // Keyboard shortcut for diagnostics (Ctrl+Shift+D)
   useEffect(() => {
@@ -815,10 +572,10 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
   }, []);
   
   // Diagnostics functions
-  const runDiagnostics = () => {
+  const runDiagnostics = async () => {
     const diagnostics = {
       timestamp: new Date().toISOString(),
-      storage: getStorageUsage(),
+      databaseMode: dbOperations.isUsingDatabase ? dbOperations.isUsingDatabase() : 'unknown',
       campaignData: {
         id: campaignData.id,
         stepsWithData: Object.keys(stepData).filter(key => stepData[key]),
@@ -829,14 +586,31 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
           return acc;
         }, {})
       },
-      localStorage: {
-        keys: Object.keys(localStorage).filter(key => key.includes('campaign')),
-        sizes: Object.keys(localStorage).reduce((acc, key) => {
-          if (key.includes('campaign')) {
-            acc[key] = Math.round(localStorage.getItem(key).length / 1024);
-          }
-          return acc;
-        }, {})
+      storage: {
+        localStorage: {
+          keys: Object.keys(localStorage).filter(key => key.includes('campaign')),
+          sizes: Object.keys(localStorage).reduce((acc, key) => {
+            if (key.includes('campaign')) {
+              try {
+                acc[key] = Math.round(localStorage.getItem(key).length / 1024);
+              } catch (e) {
+                acc[key] = 'error';
+              }
+            }
+            return acc;
+          }, {}),
+          totalSizeKB: Object.keys(localStorage).reduce((total, key) => {
+            try {
+              return total + localStorage.getItem(key).length;
+            } catch (e) {
+              return total;
+            }
+          }, 0) / 1024
+        }
+      },
+      database: {
+        available: dbOperations.isUsingDatabase ? dbOperations.isUsingDatabase() : false,
+        draftsStored: 'checking...' // Could be async checked
       },
       images: {
         productImages: stepData.product?.images?.length || 0,
@@ -860,16 +634,38 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
     return diagnostics;
   };
   
-  const clearAllDrafts = () => {
-    const keys = Object.keys(localStorage).filter(key => 
-      key.startsWith('campaign_draft_') || 
-      key.startsWith('campaign_minimal_') || 
-      key.startsWith('campaign_recovery_')
-    );
+  const clearAllDrafts = async () => {
+    let clearedCount = 0;
     
-    keys.forEach(key => localStorage.removeItem(key));
-    console.log(`🗑️ Cleared ${keys.length} draft entries`);
-    alert(`Cleared ${keys.length} draft entries. Refresh to see storage changes.`);
+    try {
+      // Clear database drafts if available
+      if (dbOperations.isUsingDatabase && dbOperations.isUsingDatabase()) {
+        try {
+          await dbOperations.deleteCampaignDraft(campaignData.id);
+          await dbOperations.deleteCampaignDraft(`${campaignData.id}_minimal`);
+          clearedCount += 2;
+          console.log('🗑️ Cleared database drafts');
+        } catch (dbError) {
+          console.warn('Failed to clear database drafts:', dbError);
+        }
+      }
+      
+      // Clear localStorage drafts as fallback/legacy cleanup
+      const keys = Object.keys(localStorage).filter(key => 
+        key.startsWith('campaign_draft_') || 
+        key.startsWith('campaign_minimal_') || 
+        key.startsWith('campaign_recovery_')
+      );
+      
+      keys.forEach(key => localStorage.removeItem(key));
+      clearedCount += keys.length;
+      
+      console.log(`🗑️ Cleared ${clearedCount} total draft entries`);
+      alert(`Cleared ${clearedCount} draft entries. Using database for better storage management.`);
+    } catch (error) {
+      console.error('Error clearing drafts:', error);
+      alert('Failed to clear some drafts. Please try again.');
+    }
   };
   
   const exportDiagnostics = () => {
@@ -953,25 +749,11 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Storage Usage Indicator */}
-              {(() => {
-                const storageInfo = getStorageUsage();
-                const statusClasses = storageInfo.critical 
-                  ? 'bg-red-100 text-red-700 border border-red-200' 
-                  : storageInfo.approaching 
-                    ? 'bg-orange-100 text-orange-700 border border-orange-200' 
-                    : 'bg-gray-100 text-gray-600';
-                
-                return (
-                  <div className={`text-xs px-3 py-2 rounded-md ${statusClasses} cursor-help`}
-                       title={`Total: ${storageInfo.totalSizeKB}KB | Drafts: ${storageInfo.campaignDraftSizeKB}KB (${storageInfo.campaignDraftCount} drafts)`}>
-                    {storageInfo.critical ? '🚨' : storageInfo.approaching ? '⚠️' : '💾'} 
-                    Storage: {storageInfo.usagePercent}%
-                    {storageInfo.critical && ' (Critical!)'}
-                    {storageInfo.approaching && !storageInfo.critical && ' (High)'}
-                  </div>
-                );
-              })()}
+              {/* Database Status Indicator */}
+              <div className="text-xs px-3 py-2 rounded-md bg-green-100 text-green-700 cursor-help"
+                   title="Using database for reliable data storage">
+                🗄️ Database Mode
+              </div>
               
               {/* Save Status Indicator */}
               <div className={`text-xs px-3 py-2 rounded-md transition-all duration-200 ${
@@ -1014,93 +796,34 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
         </div>
       </div>
       
-      {/* User Notifications Banner */}
-      {(() => {
-        const storageInfo = getStorageUsage();
-        const showStorageWarning = storageInfo.approaching || storageInfo.critical;
-        const showQuotaError = saveStatus === 'error-quota';
-        const showMinimalSave = saveStatus === 'saved-minimal' || saveStatus === 'saved-recovery';
-        
-        if (!showStorageWarning && !showQuotaError && !showMinimalSave) return null;
-        
-        return (
-          <div className={`border-l-4 p-4 mb-4 ${
-            showQuotaError || storageInfo.critical 
-              ? 'bg-red-50 border-red-400' 
-              : showMinimalSave || storageInfo.approaching 
-                ? 'bg-yellow-50 border-yellow-400' 
-                : 'bg-blue-50 border-blue-400'
-          }`}>
-            <div className="flex">
-              <div className="flex-shrink-0">
-                {showQuotaError || storageInfo.critical ? '🚨' : '⚠️'}
-              </div>
-              <div className="ml-3">
-                <h3 className={`text-sm font-medium ${
-                  showQuotaError || storageInfo.critical ? 'text-red-800' : 'text-yellow-800'
-                }`}>
-                  {showQuotaError ? 'Storage Full - Save Failed' :
-                   storageInfo.critical ? 'Storage Critical' :
-                   showMinimalSave ? 'Limited Save Mode' :
-                   'Storage Warning'}
-                </h3>
-                <div className={`mt-2 text-sm ${
-                  showQuotaError || storageInfo.critical ? 'text-red-700' : 'text-yellow-700'
-                }`}>
-                  {showQuotaError && (
-                    <div className="space-y-2">
-                      <p>Your browser storage is full. Your work could not be saved completely.</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={clearAllDrafts}
-                          className="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
-                        >
-                          Clear Old Drafts
-                        </button>
-                        <button
-                          onClick={() => setShowDiagnostics(true)}
-                          className="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
-                        >
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {storageInfo.critical && !showQuotaError && (
-                    <div className="space-y-2">
-                      <p>Browser storage is nearly full ({storageInfo.usagePercent}%). Consider clearing old data.</p>
-                      <button
-                        onClick={clearAllDrafts}
-                        className="inline-flex items-center px-3 py-1 border border-yellow-300 text-xs font-medium rounded text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
-                      >
-                        Clear Old Drafts
-                      </button>
-                    </div>
-                  )}
-                  
-                  {showMinimalSave && (
-                    <div className="space-y-2">
-                      <p>Your work was saved in minimal mode due to storage constraints. Some data may not persist.</p>
-                      <div className="text-xs">
-                        <p>• Product images may not appear after refresh</p>
-                        <p>• Some creative elements may be missing</p>
-                        <p>• Consider clearing old drafts to improve saving</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {storageInfo.approaching && !storageInfo.critical && !showQuotaError && (
-                    <div>
-                      <p>Browser storage is getting full ({storageInfo.usagePercent}%). You may want to clear old campaign drafts.</p>
-                    </div>
-                  )}
+      {/* Save Error Notifications */}
+      {saveStatus === 'error' && (
+        <div className="border-l-4 p-4 mb-4 bg-red-50 border-red-400">
+          <div className="flex">
+            <div className="flex-shrink-0">🚨</div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Save Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>Failed to save your work. Your changes may not persist.</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button
+                    onClick={handleManualSave}
+                    className="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                  >
+                    Retry Save
+                  </button>
+                  <button
+                    onClick={() => setShowDiagnostics(true)}
+                    className="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                  >
+                    View Details
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
       
       {/* Progress Indicator */}
       <FlowProgress

@@ -44,8 +44,9 @@ setInterval(() => {
   }
 }, 60000); // Check every minute
 
-// Middleware
-app.use(express.json());
+// Middleware - Increase JSON payload limit for large campaign data
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Add more detailed CORS configuration
 app.use(cors({
@@ -321,6 +322,200 @@ app.post('/api/fetch-product-image', async (req, res) => {
     res.status(statusCode).json({ 
       error: errorMessage,
       alternativeSuggestion: 'Try uploading an image directly instead.'
+    });
+  }
+});
+
+// Campaign endpoint for full campaign saves (Campaign Flow V2)
+app.all('/api/campaigns', async (req, res) => {
+  try {
+    if (req.method === 'POST') {
+      // Save complete campaign
+      const campaignData = req.body;
+      console.log('📋 Saving complete campaign:', campaignData.id || campaignData.name);
+      
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Create campaigns directory
+      const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
+      if (!fs.existsSync(campaignsDir)) {
+        fs.mkdirSync(campaignsDir, { recursive: true });
+      }
+      
+      // Generate campaign ID if not provided
+      const campaignId = campaignData.id || `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Save campaign to file
+      const campaignFile = path.join(campaignsDir, `${campaignId}.json`);
+      const savedCampaign = {
+        ...campaignData,
+        id: campaignId,
+        savedAt: new Date().toISOString(),
+        source: 'campaign-flow-v2'
+      };
+      
+      fs.writeFileSync(campaignFile, JSON.stringify(savedCampaign, null, 2));
+      
+      console.log('✅ Campaign saved to file:', campaignFile);
+      res.json({ success: true, campaign: savedCampaign });
+      
+    } else if (req.method === 'GET') {
+      // Get all campaigns
+      const fs = require('fs');
+      const path = require('path');
+      
+      const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
+      
+      if (!fs.existsSync(campaignsDir)) {
+        res.json({ success: true, campaigns: [] });
+        return;
+      }
+      
+      const campaignFiles = fs.readdirSync(campaignsDir).filter(f => f.endsWith('.json'));
+      const campaigns = campaignFiles.map(file => {
+        try {
+          const filePath = path.join(campaignsDir, file);
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          return data;
+        } catch (error) {
+          console.warn('Failed to read campaign file:', file, error);
+          return null;
+        }
+      }).filter(Boolean);
+      
+      res.json({ success: true, campaigns });
+      
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
+  } catch (error) {
+    console.error('❌ Campaigns API error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Campaign draft endpoint
+app.all('/api/campaign-draft', async (req, res) => {
+  try {
+    if (req.method === 'POST') {
+      // Save campaign draft
+      const { action, campaignId, stepData } = req.body;
+      
+      if (action === 'save') {
+        console.log('📄 Saving campaign draft:', campaignId);
+        
+        // For now, we'll use a simple file-based approach since this runs server-side
+        // In production, this would use the actual database
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Create drafts directory if it doesn't exist
+        const draftsDir = path.join(process.cwd(), 'tmp', 'drafts');
+        if (!fs.existsSync(draftsDir)) {
+          fs.mkdirSync(draftsDir, { recursive: true });
+        }
+        
+        const draftFile = path.join(draftsDir, `${campaignId}.json`);
+        const draftData = {
+          campaignId,
+          stepData,
+          autoSavedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        };
+        
+        fs.writeFileSync(draftFile, JSON.stringify(draftData, null, 2));
+        
+        res.json({ success: true, draft: draftData });
+      } else {
+        res.status(400).json({ error: 'Invalid action' });
+      }
+    } else if (req.method === 'GET') {
+      // Get campaign draft
+      const { campaignId } = req.query;
+      
+      console.log('📄 Loading campaign draft:', campaignId);
+      
+      const fs = require('fs');
+      const path = require('path');
+      
+      const draftFile = path.join(process.cwd(), 'tmp', 'drafts', `${campaignId}.json`);
+      
+      if (fs.existsSync(draftFile)) {
+        const draftData = JSON.parse(fs.readFileSync(draftFile, 'utf8'));
+        
+        // Check if draft has expired
+        if (draftData.expiresAt && new Date(draftData.expiresAt) < new Date()) {
+          fs.unlinkSync(draftFile);
+          res.status(404).json({ error: 'Draft not found or expired' });
+        } else {
+          res.json({ success: true, draft: draftData });
+        }
+      } else {
+        res.status(404).json({ error: 'Draft not found' });
+      }
+    } else if (req.method === 'DELETE') {
+      // Delete campaign draft
+      const { campaignId } = req.body;
+      
+      console.log('📄 Deleting campaign draft:', campaignId);
+      
+      const fs = require('fs');
+      const path = require('path');
+      
+      const draftFile = path.join(process.cwd(), 'tmp', 'drafts', `${campaignId}.json`);
+      
+      if (fs.existsSync(draftFile)) {
+        fs.unlinkSync(draftFile);
+      }
+      
+      res.json({ success: true });
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
+  } catch (error) {
+    console.error('❌ Campaign draft API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const healthStatus = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      environment: process.env.NODE_ENV || 'development',
+      checks: {
+        server: {
+          status: 'healthy',
+          message: 'Express server running',
+          uptime: Math.round(process.uptime()) + ' seconds'
+        },
+        memory: {
+          status: 'healthy',
+          usage: {
+            rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+            heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+            heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
+          }
+        },
+        cache: {
+          status: 'healthy',
+          message: `${productCache.size} items cached`
+        }
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.json(healthStatus);
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Health check failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });

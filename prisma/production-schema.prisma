@@ -1,0 +1,277 @@
+// Production Prisma Schema for Supabase
+// Optimized for production deployment with proper indexing and constraints
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table for multi-user support
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  products              Product[]
+  campaigns             Campaign[]
+  platformIntegrations  PlatformIntegration[]
+  aiGenerations         AiGeneration[]
+
+  @@map("users")
+}
+
+// Products table
+model Product {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String
+  description String?
+  brand       String?
+  category    String?
+  price       Decimal? @db.Decimal(10, 2)
+  sku         String?
+  url         String?
+  utmCodes    Json     @default("{}") @map("utm_codes")
+  metadata    Json     @default("{}")
+  settings    Json     @default("{}")
+  status      String   @default("active")
+  legacyId    String?  @map("legacy_id") // For migration compatibility
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images        ProductImage[]
+  campaigns     Campaign[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+  @@index([legacyId])
+  @@map("products")
+}
+
+// Product Images table
+model ProductImage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  url        String
+  storagePath String? @map("storage_path")
+  fileName   String?  @map("file_name")
+  altText    String?  @map("alt_text")
+  size       String?
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  backgroundVersions BackgroundVersion[]
+
+  @@index([productId])
+  @@index([isPrimary])
+  @@map("product_images")
+}
+
+// Background Versions table (for AI-generated backgrounds)
+model BackgroundVersion {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productImageId  String   @map("product_image_id") @db.Uuid
+  url             String
+  storagePath     String?  @map("storage_path")
+  prompt          String?
+  requestId       String?  @map("request_id")
+  processingTime  Int?     @map("processing_time")
+  metadata        Json     @default("{}")
+  isActive        Boolean  @default(false) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  productImage ProductImage @relation(fields: [productImageId], references: [id], onDelete: Cascade)
+
+  @@index([productImageId])
+  @@index([isActive])
+  @@map("background_versions")
+}
+
+// Campaigns table
+model Campaign {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  productId      String?   @map("product_id") @db.Uuid
+  name           String
+  type           String?
+  status         String    @default("draft")
+  budget         Decimal?  @db.Decimal(10, 2)
+  currency       String    @default("USD")
+  startsAt       DateTime? @map("starts_at") @db.Timestamptz(6)
+  endsAt         DateTime? @map("ends_at") @db.Timestamptz(6)
+  launchedAt     DateTime? @map("launched_at") @db.Timestamptz(6)
+  
+  // Campaign Configuration (stored as JSON for flexibility)
+  audienceConfig Json      @default("{}") @map("audience_config")
+  platformConfig Json      @default("{}") @map("platform_config")
+  creativeConfig Json      @default("{}") @map("creative_config")
+  publishConfig  Json      @default("{}") @map("publish_config")
+  
+  // Legacy Support
+  legacyData     Json      @default("{}") @map("legacy_data")
+  source         String    @default("v2")
+  legacyId       String?   @map("legacy_id") // For migration compatibility
+  
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product             Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  creatives           Creative[]
+  drafts              CampaignDraft[]
+  publications        CampaignPublication[]
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([source])
+  @@index([legacyId])
+  @@map("campaigns")
+}
+
+// Campaign Drafts table (for auto-save functionality)
+model CampaignDraft {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId   String   @map("campaign_id") @db.Uuid
+  stepData     Json     @default("{}") @map("step_data")
+  autoSavedAt  DateTime @default(now()) @map("auto_saved_at") @db.Timestamptz(6)
+  expiresAt    DateTime @default(dbgenerated("(NOW() + INTERVAL '7 days')")) @map("expires_at") @db.Timestamptz(6)
+
+  // Relations
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([expiresAt])
+  @@map("campaign_drafts")
+}
+
+// Creatives table
+model Creative {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId String   @map("campaign_id") @db.Uuid
+  name       String?
+  formatId   String?  @map("format_id")
+  formatName String?  @map("format_name")
+  width      Int?
+  height     Int?
+  elements   Json     @default("[]")
+  metadata   Json     @default("{}")
+  version    Int      @default(1)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  campaign Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  assets   CreativeAsset[]
+
+  @@index([campaignId])
+  @@index([isActive])
+  @@map("creatives")
+}
+
+// Creative Assets table
+model CreativeAsset {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creativeId  String   @map("creative_id") @db.Uuid
+  type        String   // 'image', 'video', 'text', 'button'
+  url         String?
+  storagePath String?  @map("storage_path")
+  content     String?
+  styles      Json     @default("{}")
+  position    Json     @default("{}")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@index([creativeId])
+  @@index([type])
+  @@map("creative_assets")
+}
+
+// Platform Integrations table
+model PlatformIntegration {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  platformId        String    @map("platform_id") // 'meta', 'display', 'ctv', 'tiktok'
+  platformAccountId String?   @map("platform_account_id")
+  accessToken       String?   @map("access_token")
+  refreshToken      String?   @map("refresh_token")
+  expiresAt         DateTime? @map("expires_at") @db.Timestamptz(6)
+  settings          Json      @default("{}")
+  status            String    @default("active")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publications CampaignPublication[]
+
+  @@index([userId])
+  @@index([platformId])
+  @@index([status])
+  @@map("platform_integrations")
+}
+
+// Campaign Publications table
+model CampaignPublication {
+  id                     String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId             String               @map("campaign_id") @db.Uuid
+  platformIntegrationId  String?              @map("platform_integration_id") @db.Uuid
+  externalId             String?              @map("external_id")
+  status                 String?
+  metrics                Json                 @default("{}")
+  lastSyncAt             DateTime?            @map("last_sync_at") @db.Timestamptz(6)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  campaign            Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platformIntegration PlatformIntegration? @relation(fields: [platformIntegrationId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([platformIntegrationId])
+  @@index([status])
+  @@map("campaign_publications")
+}
+
+// AI Generation History table
+model AiGeneration {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  type           String   // 'background', 'copy', 'image'
+  prompt         String?
+  requestId      String?  @map("request_id")
+  responseData   Json?    @map("response_data")
+  processingTime Int?     @map("processing_time")
+  costCredits    Decimal? @map("cost_credits") @db.Decimal(10, 4)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("ai_generations")
+} 

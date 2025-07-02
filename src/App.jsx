@@ -6,8 +6,13 @@ import { loadSampleData } from './sample-data.js';
 import BackgroundCustomizer from './components/BackgroundCustomizer.jsx';
 
 // Feature flags and new flow imports
-import { isFeatureEnabled } from './config/features.js';
+import { isFeatureEnabled, FEATURES } from './config/features.js';
 import CampaignFlowV2 from './flows/v2/CampaignFlowV2.jsx';
+
+// Database integration
+import { databaseAdapter } from './services/databaseAdapter.js';
+import DatabaseMigrationUI from './components/DatabaseMigrationUI.jsx';
+import { debugCampaigns } from './services/debug-campaigns.js';
 
 // Create AppContext for sharing app state
 const AppContext = createContext({
@@ -3036,10 +3041,13 @@ function ProductManagerView({ onCreateNew, onProductClick, onEditProduct, dbOper
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        if (dbOperations) {
-            const loadedProducts = dbOperations.getProducts();
-            setProducts(loadedProducts);
-        }
+        const loadProducts = async () => {
+            if (dbOperations) {
+                const loadedProducts = await dbOperations.getProductsAsync();
+                setProducts(loadedProducts);
+            }
+        };
+        loadProducts();
     }, [dbOperations]);
 
     const filteredProducts = products.filter(product =>
@@ -3112,10 +3120,18 @@ function CampaignManagerView({ onCreateNew, onCampaignClick, dbOperations }) {
     // Get campaigns from storage
     const [campaigns, setCampaigns] = useState([]);
 
-    const loadCampaigns = () => {
+    const loadCampaigns = async () => {
         if (dbOperations) {
-            const loadedCampaigns = dbOperations.getCampaigns();
-            setCampaigns(loadedCampaigns);
+            try {
+                console.log('🔄 Loading campaigns...');
+                // Use async version to get fresh data
+                const loadedCampaigns = await dbOperations.getCampaignsAsync();
+                console.log('📊 Loaded campaigns:', loadedCampaigns.length, 'campaigns');
+                console.log('📋 Campaign data:', loadedCampaigns);
+                setCampaigns(loadedCampaigns);
+            } catch (error) {
+                console.error('❌ Error loading campaigns:', error);
+            }
         }
     };
 
@@ -3651,10 +3667,13 @@ function AccountView({ dbOperations }) {
     const [clearStatus, setClearStatus] = useState(null);
 
     useEffect(() => {
-        if (dbOperations) {
-            const info = dbOperations.getStorageInfo();
-            setStorageInfo(info);
-        }
+        const loadStorageInfo = async () => {
+            if (dbOperations) {
+                const info = await dbOperations.getStorageInfo();
+                setStorageInfo(info);
+            }
+        };
+        loadStorageInfo();
     }, [dbOperations]);
 
     const handleClearOldCampaigns = async () => {
@@ -3664,14 +3683,14 @@ function AccountView({ dbOperations }) {
         setClearStatus(null);
         
         try {
-            const result = dbOperations.clearOldCampaigns();
+            const result = await dbOperations.clearOldCampaigns();
             if (result.success) {
                 setClearStatus({
                     type: 'success',
                     message: `Cleared ${result.cleared} old campaigns successfully!`
                 });
                 // Refresh storage info
-                const newInfo = dbOperations.getStorageInfo();
+                const newInfo = await dbOperations.getStorageInfo();
                 setStorageInfo(newInfo);
             } else {
                 setClearStatus({
@@ -4930,228 +4949,122 @@ function App() {
     const [currentView, setCurrentView] = useState(VIEW_CREATE_CAMPAIGN);
     const [adData, setAdData] = useState(null);
     const [campaignSettings, setCampaignSettings] = useState(null);
-    const [appView, setAppView] = useState(APP_VIEW_CAMPAIGN_BUILDER);
+    const [appView, setAppView] = useState(APP_VIEW_CAMPAIGN_MANAGER);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showMigrationUI, setShowMigrationUI] = useState(false);
+    
+    // Database integration state
+    const [databaseStatus, setDatabaseStatus] = useState(null);
+    const [isInitializing, setIsInitializing] = useState(true);
 
-    // Database Operations (using localStorage as temporary storage) - MEMOIZED to prevent re-creation
-    const dbOperations = useMemo(() => ({
-        saveAd: (adData) => {
+    // Initialize database adapter and check status
+    useEffect(() => {
+        const initializeDatabase = async () => {
             try {
-                // Get existing campaigns
-                const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                console.log('🚀 Initializing database adapter...');
                 
-                // Create a lightweight campaign entry without large image data
-                const lightweightAdData = {
-                    ...adData,
-                    // Store image reference instead of full base64 data
-                    imageSrc: adData.imageSrc ? '[Image Data - Not Stored]' : null,
-                    // Keep other important data but remove large image content
-                    originalImage: adData.originalImage ? '[Original Image - Not Stored]' : null
-                };
+                // Initialize cache and check migration status
+                await databaseAdapter.initializeCache();
+                const status = await databaseAdapter.getHealthStatus();
                 
-                // Create a new campaign entry
-                const newCampaign = {
-                    id: String(Date.now()), // Generate a unique ID
-                    productId: adData.productId || null, // NEW: Link to product
-                    name: adData.campaignName,
-                    status: 'Draft',
-                    info: true,
-                    created: new Date().toLocaleDateString(),
-                    type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
-                    budget: '$0.00', // Default budget
-                    starts: 'Not Set',
-                    ends: 'Not Set',
-                    adData: lightweightAdData // Store lightweight ad data without images
-                };
-
-                // Check storage space before saving
-                const testData = JSON.stringify([...existingCampaigns, newCampaign]);
-                if (testData.length > 4.5 * 1024 * 1024) { // 4.5MB limit to be safe
-                    // If too large, keep only the most recent 50 campaigns
-                    const recentCampaigns = existingCampaigns.slice(-49); // Keep 49, add 1 new = 50 total
-                    const finalCampaigns = [...recentCampaigns, newCampaign];
-                    localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
-                    console.warn('Storage limit reached. Keeping only 50 most recent campaigns.');
-                } else {
-                // Add to campaigns list
-                existingCampaigns.push(newCampaign);
-                localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
-                }
+                setDatabaseStatus(status);
+                console.log('📊 Database status:', status);
                 
-                return { success: true, campaign: newCampaign };
-            } catch (error) {
-                console.error('Error saving campaign:', error);
-                
-                // If still failing due to quota, try emergency cleanup
-                if (error.name === 'QuotaExceededError') {
-                    try {
-                        // Keep only the 10 most recent campaigns and try again
-                        const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-                        const recentCampaigns = existingCampaigns.slice(-9); // Keep 9, add 1 new = 10 total
-                        
-                        const lightweightAdData = {
-                            campaignName: adData.campaignName,
-                            productId: adData.productId,
-                            ctaType: adData.ctaType,
-                            adSize: adData.adSize,
-                            audience: adData.audience
-                        };
-                        
-                        const newCampaign = {
-                            id: String(Date.now()),
-                            productId: adData.productId || null,
-                            name: adData.campaignName,
-                            status: 'Draft',
-                            info: true,
-                            created: new Date().toLocaleDateString(),
-                            type: adData.ctaType === CTA_TYPE_WHERE_TO_BUY ? 'Where to Buy' : 'Add to Cart',
-                            budget: '$0.00',
-                            starts: 'Not Set',
-                            ends: 'Not Set',
-                            adData: lightweightAdData
-                        };
-                        
-                        const finalCampaigns = [...recentCampaigns, newCampaign];
-                        localStorage.setItem('campaigns', JSON.stringify(finalCampaigns));
-                        
-                        console.warn('Emergency storage cleanup performed. Keeping only 10 most recent campaigns.');
-                        return { success: true, campaign: newCampaign };
-                    } catch (secondError) {
-                        console.error('Emergency save also failed:', secondError);
-                        return { success: false, error: 'Storage quota exceeded. Please clear browser data.' };
+                // Show migration UI if enabled and data exists for migration
+                if (FEATURES.SHOW_MIGRATION_UI && !databaseAdapter.isUsingDatabase()) {
+                    const localCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                    const localProducts = JSON.parse(localStorage.getItem('products') || '[]');
+                    
+                    if (localCampaigns.length > 0 || localProducts.length > 0) {
+                        setShowMigrationUI(true);
                     }
                 }
-                
-                return { success: false, error: error.message };
+            } catch (error) {
+                console.error('❌ Failed to initialize database:', error);
+                setDatabaseStatus({ error: error.message });
+            } finally {
+                setIsInitializing(false);
             }
+        };
+
+        initializeDatabase();
+        
+        // Make debug function available globally for testing
+        window.debugCampaigns = debugCampaigns;
+    }, []);
+
+    // Database Operations (integrated with database adapter) - MEMOIZED to prevent re-creation
+    const dbOperations = useMemo(() => ({
+        saveAd: async (adData) => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.saveAd(adData);
         },
 
         getCampaigns: () => {
-            try {
-                // Get campaigns from legacy campaign builder
-                const legacyCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-                
-                // Get campaigns from V2 flow (saved campaigns)
-                const v2Campaigns = JSON.parse(localStorage.getItem('saved_campaigns') || '[]');
-                
-                // Transform V2 campaigns to match legacy format
-                const transformedV2Campaigns = v2Campaigns.map(campaign => ({
-                    id: campaign.id,
-                    productId: campaign.data?.product?.id || null,
-                    name: campaign.name,
-                    status: campaign.status === 'draft' ? 'Draft' : campaign.status === 'active' ? 'Active' : campaign.status,
-                    info: true,
-                    created: new Date(campaign.createdAt).toLocaleDateString(),
-                    type: campaign.data?.creative?.selectedFormats?.includes('video') ? 'Video Campaign' : 'Display Campaign',
-                    budget: '$0.00', // Default for now, could be enhanced
-                    starts: campaign.launchedAt ? new Date(campaign.launchedAt).toLocaleDateString() : 'Not Set',
-                    ends: 'Not Set',
-                    adData: campaign.data,
-                    source: 'v2' // Mark as V2 campaign for identification
-                }));
-                
-                // Combine and return both legacy and V2 campaigns
-                return [...legacyCampaigns, ...transformedV2Campaigns];
-            } catch (error) {
-                console.error('Error getting campaigns:', error);
-                return [];
-            }
+            // Use synchronous method for immediate access (reads from cache)
+            return databaseAdapter.getCampaigns();
+        },
+
+        // Async version for when fresh data is needed
+        getCampaignsAsync: async () => {
+            return await databaseAdapter.getCampaignsAsync();
         },
 
         // Utility function to clear old campaigns if storage is getting full
-        clearOldCampaigns: () => {
-            try {
-                const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-                // Keep only the 20 most recent campaigns
-                const recentCampaigns = campaigns.slice(-20);
-                localStorage.setItem('campaigns', JSON.stringify(recentCampaigns));
-                console.log(`Cleared ${campaigns.length - recentCampaigns.length} old campaigns`);
-                return { success: true, cleared: campaigns.length - recentCampaigns.length };
-            } catch (error) {
-                console.error('Error clearing campaigns:', error);
-                return { success: false, error: error.message };
-            }
+        clearOldCampaigns: async () => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.clearOldCampaigns();
         },
 
         // Get storage usage info
-        getStorageInfo: () => {
-            try {
-                const campaigns = JSON.stringify(localStorage.getItem('campaigns') || '[]');
-                const products = JSON.stringify(localStorage.getItem('products') || '[]');
-                const totalSize = campaigns.length + products.length;
-                const maxSize = 5 * 1024 * 1024; // 5MB typical limit
-                return {
-                    used: totalSize,
-                    max: maxSize,
-                    percentage: Math.round((totalSize / maxSize) * 100),
-                    campaigns: JSON.parse(localStorage.getItem('campaigns') || '[]').length,
-                    products: JSON.parse(localStorage.getItem('products') || '[]').length
-                };
-            } catch (error) {
-                return { used: 0, max: 5242880, percentage: 0, campaigns: 0, products: 0 };
-            }
+        getStorageInfo: async () => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.getStorageInfo();
         },
 
         // Product operations
-        saveProduct: (productData) => {
-            try {
-                const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-                const newProduct = {
-                    id: String(Date.now()),
-                    ...productData,
-                    created: new Date().toISOString(),
-                    updated: new Date().toISOString(),
-                    status: productData.status || 'Draft'
-                };
-                existingProducts.push(newProduct);
-                localStorage.setItem('products', JSON.stringify(existingProducts));
-                return { success: true, product: newProduct };
-            } catch (error) {
-                console.error('Error saving product:', error);
-                return { success: false, error: error.message };
-            }
+        saveProduct: async (productData) => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.saveProduct(productData);
         },
 
         getProducts: () => {
-            try {
-                return JSON.parse(localStorage.getItem('products') || '[]');
-            } catch (error) {
-                console.error('Error getting products:', error);
-                return [];
-            }
+            // Use synchronous method for immediate access (reads from cache)
+            return databaseAdapter.getProducts();
         },
 
-        updateProduct: (productId, updates) => {
-            try {
-                const products = JSON.parse(localStorage.getItem('products') || '[]');
-                const productIndex = products.findIndex(p => p.id === productId);
-                if (productIndex !== -1) {
-                    products[productIndex] = {
-                        ...products[productIndex],
-                        ...updates,
-                        updated: new Date().toISOString()
-                    };
-                    localStorage.setItem('products', JSON.stringify(products));
-                    return { success: true, product: products[productIndex] };
-                }
-                return { success: false, error: 'Product not found' };
-            } catch (error) {
-                console.error('Error updating product:', error);
-                return { success: false, error: error.message };
-            }
+        // Async version for when fresh data is needed
+        getProductsAsync: async () => {
+            return await databaseAdapter.getProductsAsync();
         },
 
-        deleteProduct: (productId) => {
-            try {
-                const products = JSON.parse(localStorage.getItem('products') || '[]');
-                const filteredProducts = products.filter(p => p.id !== productId);
-                localStorage.setItem('products', JSON.stringify(filteredProducts));
-                return { success: true };
-            } catch (error) {
-                console.error('Error deleting product:', error);
-                return { success: false, error: error.message };
-            }
+        updateProduct: async (productId, updates) => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.updateProduct(productId, updates);
+        },
+
+        deleteProduct: async (productId) => {
+            // Use database adapter which handles the database/localStorage routing
+            return await databaseAdapter.deleteProduct(productId);
+        },
+
+        // Database management operations
+        getDatabaseStatus: () => databaseStatus,
+        isUsingDatabase: () => databaseAdapter.isUsingDatabase(),
+        getMigrationStatus: () => databaseAdapter.getMigrationStatus(),
+        runMigration: async () => await databaseAdapter.runMigration(),
+        validateMigration: async () => await databaseAdapter.validateMigration(),
+
+        // Campaign Draft operations (V2 Flow)
+        saveCampaignDraft: async (campaignId, stepData) => {
+            return await databaseAdapter.saveCampaignDraft(campaignId, stepData);
+        },
+        getCampaignDraft: async (campaignId) => {
+            return await databaseAdapter.getCampaignDraft(campaignId);
+        },
+        deleteCampaignDraft: async (campaignId) => {
+            return await databaseAdapter.deleteCampaignDraft(campaignId);
         },
 
         // Background operations for Phase 2 features
@@ -5820,12 +5733,42 @@ function App() {
                         ) : appView === APP_VIEW_ACCOUNT ? (
                             <AccountView dbOperations={dbOperations} />
                         ) : appView === APP_VIEW_CAMPAIGN_FLOW_V2 ? (
-                            <CampaignFlowV2
-                                onComplete={handleCampaignFlowV2Complete}
-                                onCancel={handleCampaignFlowV2Cancel}
-                                initialData={selectedProduct ? { product: selectedProduct } : {}}
-                                dbOperations={dbOperations}
-                            />
+                            isFeatureEnabled('NEW_CAMPAIGN_FLOW') ? (
+                                <CampaignFlowV2
+                                    onComplete={handleCampaignFlowV2Complete}
+                                    onCancel={handleCampaignFlowV2Cancel}
+                                    initialData={selectedProduct ? { product: selectedProduct } : {}}
+                                    dbOperations={dbOperations}
+                                />
+                            ) : (
+                                <div className="max-w-4xl mx-auto">
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                                        <div className="flex">
+                                            <div className="flex-shrink-0">
+                                                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <div className="ml-3">
+                                                <h3 className="text-sm font-medium text-yellow-800">
+                                                    Enhanced Campaign Flow Not Enabled
+                                                </h3>
+                                                <div className="mt-2 text-sm text-yellow-700">
+                                                    <p>The enhanced campaign builder is currently disabled. To enable it, set <code>VITE_NEW_CAMPAIGN_FLOW=true</code> in your environment variables.</p>
+                                                </div>
+                                                <div className="mt-4">
+                                                    <Button 
+                                                        onClick={() => setAppView(APP_VIEW_CAMPAIGN_MANAGER)}
+                                                        variant="secondary"
+                                                    >
+                                                        ← Back to Campaign Manager
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
                         ) : (
                             <div className="max-w-7xl mx-auto">
                                 {currentView !== VIEW_CREATE_CAMPAIGN && (
@@ -5848,6 +5791,24 @@ function App() {
                         )}
                     </main>
                 </div>
+                
+                {/* Database Migration UI - Development Tool */}
+                {showMigrationUI && (
+                    <DatabaseMigrationUI onClose={() => setShowMigrationUI(false)} />
+                )}
+                
+                {/* Development Tools - Only show in development */}
+                {import.meta.env.DEV && FEATURES.SHOW_MIGRATION_UI && (
+                    <div className="fixed bottom-4 right-4 z-40">
+                        <button
+                            onClick={() => setShowMigrationUI(true)}
+                            className="bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg hover:bg-blue-700 text-sm"
+                            title="Open Database Migration Console"
+                        >
+                            🗄️ DB Console
+                        </button>
+                    </div>
+                )}
             </div>
         </AppContext.Provider>
     );

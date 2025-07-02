@@ -1,0 +1,261 @@
+// Development Prisma Schema using SQLite
+// This allows immediate local development without Docker or external services
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Users table for multi-user support
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  settings  String   @default("{}") // JSON stored as string in SQLite
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  products              Product[]
+  campaigns             Campaign[]
+  platformIntegrations  PlatformIntegration[]
+  aiGenerations         AiGeneration[]
+
+  @@map("users")
+}
+
+// Products table
+model Product {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?
+  brand       String?
+  category    String?
+  price       Float?   // SQLite uses REAL for decimals
+  sku         String?
+  url         String?
+  utmCodes    String   @default("{}") @map("utm_codes") // JSON as string
+  metadata    String   @default("{}") // JSON as string
+  settings    String   @default("{}") // JSON as string
+  status      String   @default("active")
+  legacyId    String?  @map("legacy_id") // For migration compatibility
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images        ProductImage[]
+  campaigns     Campaign[]
+
+  @@map("products")
+}
+
+// Product Images table
+model ProductImage {
+  id         String   @id @default(cuid())
+  productId  String   @map("product_id")
+  url        String
+  storagePath String? @map("storage_path")
+  fileName   String?  @map("file_name")
+  altText    String?  @map("alt_text")
+  size       String?
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  metadata   String   @default("{}") // JSON as string
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  backgroundVersions BackgroundVersion[]
+
+  @@map("product_images")
+}
+
+// Background Versions table (for AI-generated backgrounds)
+model BackgroundVersion {
+  id              String   @id @default(cuid())
+  productImageId  String   @map("product_image_id")
+  url             String
+  storagePath     String?  @map("storage_path")
+  prompt          String?
+  requestId       String?  @map("request_id")
+  processingTime  Int?     @map("processing_time")
+  metadata        String   @default("{}") // JSON as string
+  isActive        Boolean  @default(false) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  productImage ProductImage @relation(fields: [productImageId], references: [id], onDelete: Cascade)
+
+  @@map("background_versions")
+}
+
+// Campaigns table
+model Campaign {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  productId      String?   @map("product_id")
+  name           String
+  type           String?
+  status         String    @default("draft")
+  budget         Float?    // SQLite uses REAL for decimals
+  currency       String    @default("USD")
+  startsAt       DateTime? @map("starts_at")
+  endsAt         DateTime? @map("ends_at")
+  launchedAt     DateTime? @map("launched_at")
+  
+  // Campaign Configuration (stored as JSON strings for SQLite)
+  audienceConfig String    @default("{}") @map("audience_config")
+  platformConfig String    @default("{}") @map("platform_config")
+  creativeConfig String    @default("{}") @map("creative_config")
+  publishConfig  String    @default("{}") @map("publish_config")
+  
+  // Legacy Support
+  legacyData     String    @default("{}") @map("legacy_data")
+  source         String    @default("v2")
+  legacyId       String?   @map("legacy_id") // For migration compatibility
+  
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product             Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  creatives           Creative[]
+  drafts              CampaignDraft[]
+  publications        CampaignPublication[]
+
+  @@map("campaigns")
+}
+
+// Campaign Drafts table (for auto-save functionality)
+model CampaignDraft {
+  id           String   @id @default(cuid())
+  campaignId   String   @map("campaign_id")
+  stepData     String   @default("{}") @map("step_data") // JSON as string
+  autoSavedAt  DateTime @default(now()) @map("auto_saved_at")
+  expiresAt    DateTime @map("expires_at") // Manual calculation in code
+
+  // Relations
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_drafts")
+}
+
+// Creatives table
+model Creative {
+  id         String   @id @default(cuid())
+  campaignId String   @map("campaign_id")
+  name       String?
+  formatId   String?  @map("format_id")
+  formatName String?  @map("format_name")
+  width      Int?
+  height     Int?
+  elements   String   @default("[]") // JSON as string
+  metadata   String   @default("{}") // JSON as string
+  version    Int      @default(1)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  campaign Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  assets   CreativeAsset[]
+
+  @@map("creatives")
+}
+
+// Creative Assets table
+model CreativeAsset {
+  id          String   @id @default(cuid())
+  creativeId  String   @map("creative_id")
+  type        String   // 'image', 'video', 'text', 'button'
+  url         String?
+  storagePath String?  @map("storage_path")
+  content     String?
+  styles      String   @default("{}") // JSON as string
+  position    String   @default("{}") // JSON as string
+  size        String   @default("{}") // JSON as string
+  metadata    String   @default("{}") // JSON as string
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@map("creative_assets")
+}
+
+// Platform Integrations table
+model PlatformIntegration {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  platform      String   // 'meta', 'google', 'tiktok', 'display'
+  accountId     String   @map("account_id")
+  accountName   String?  @map("account_name")
+  accessToken   String?  @map("access_token")
+  refreshToken  String?  @map("refresh_token")
+  expiresAt     DateTime? @map("expires_at")
+  scope         String?
+  settings      String   @default("{}") // JSON as string
+  isActive      Boolean  @default(true) @map("is_active")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publications CampaignPublication[]
+
+  @@unique([userId, platform, accountId])
+  @@map("platform_integrations")
+}
+
+// Campaign Publications table
+model CampaignPublication {
+  id                     String   @id @default(cuid())
+  campaignId             String   @map("campaign_id")
+  platformIntegrationId  String   @map("platform_integration_id")
+  externalCampaignId     String?  @map("external_campaign_id")
+  status                 String   @default("pending")
+  publishedAt            DateTime? @map("published_at")
+  lastSyncAt             DateTime? @map("last_sync_at")
+  metrics                String   @default("{}") @map("metrics") // JSON as string
+  errors                 String   @default("[]") @map("errors") // JSON as string
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  campaign            Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platformIntegration PlatformIntegration @relation(fields: [platformIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, platformIntegrationId])
+  @@map("campaign_publications")
+}
+
+// AI Generation tracking table
+model AiGeneration {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  type          String   // 'background', 'copy', 'image', 'video'
+  prompt        String
+  result        String?
+  requestId     String?  @map("request_id")
+  provider      String?  // 'fal-ai', 'openai', etc.
+  model         String?
+  parameters    String   @default("{}") @map("parameters") // JSON as string
+  cost          Float?   // Cost in credits/dollars
+  processingTime Int?    @map("processing_time") // milliseconds
+  status        String   @default("pending")
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_generations")
+} 

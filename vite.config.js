@@ -7,12 +7,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    strictPort: true, // Force the specified port
+    strictPort: false, // Allow fallback to other ports
     open: true, // Automatically open browser
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
+        target: 'http://localhost:3003',
+        changeOrigin: true
       }
     }
   },
