@@ -256,7 +256,7 @@ const PublishManager = ({
     }));
   };
 
-  // Save campaign without launching
+  // Save campaign
   const saveCampaign = async () => {
     setIsSaving(true);
     
@@ -276,21 +276,35 @@ const PublishManager = ({
       setPublishData(savedCampaignData);
       handlePublishUpdate(savedCampaignData);
       
-      // Create campaign object for database
+      // Create campaign object in the LEGACY FORMAT that Campaign Manager expects
       const campaignToSave = {
         id: campaignId,
-        name: publishData.campaignName,
-        status: 'draft',
-        createdAt: new Date().toISOString(),
-        savedAt: new Date().toISOString(),
-        campaignData: {
-          ...campaignData,
-          publish: savedCampaignData
-        },
-        summary: campaignSummary
+        name: publishData.campaignName || 'Untitled Campaign V2',
+        status: 'Draft',
+        info: true,
+        created: new Date().toLocaleDateString(),
+        type: 'Campaign Flow V2',
+        budget: campaignSummary.totalBudget ? `$${campaignSummary.totalBudget.toFixed(2)}` : '$0.00',
+        starts: 'Not Set',
+        ends: 'Not Set',
+        source: 'v2', // Mark as V2 campaign
+        // Store all Campaign Flow V2 data in adData field for compatibility
+        adData: {
+          campaignName: publishData.campaignName,
+          v2Data: {
+            product: campaignData?.product,
+            audience: campaignData?.audience,
+            platforms: campaignData?.platforms,
+            creatives: campaignData?.creatives,
+            publish: savedCampaignData
+          },
+          summary: campaignSummary,
+          createdAt: new Date().toISOString(),
+          savedAt: new Date().toISOString()
+        }
       };
       
-      // Save using database adapter instead of localStorage
+      // Save using database adapter - now in the correct legacy format
       const saveResult = await dbOperations.saveAd(campaignToSave);
       
       if (!saveResult.success) {
@@ -303,7 +317,7 @@ const PublishManager = ({
           throw new Error(saveResult.error || 'Failed to save campaign');
         }
       } else {
-        console.log('✅ Campaign saved successfully to database');
+        console.log('✅ Campaign Flow V2 saved successfully in legacy format:', campaignToSave.name);
       }
       
     } catch (error) {
