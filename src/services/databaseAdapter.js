@@ -156,27 +156,18 @@ class DatabaseAdapter {
 
   async getCampaignsAsync() {
     try {
-      if (this.useDatabaseForOperations) {
-        console.log('📊 Loading campaigns from database...')
-        const campaigns = await legacyCompatibility.getCampaigns()
-        this.campaignsCache = campaigns // Update cache
-        return campaigns
-      } else {
-        console.log('📊 Loading campaigns from localStorage...')
-        const campaigns = this.getCampaignsFromLocalStorage()
-        this.campaignsCache = campaigns // Update cache
-        return campaigns
-      }
+      // Always try the API first (consistent with saveAd behavior)
+      console.log('📊 Loading campaigns from API...')
+      const campaigns = await legacyCompatibility.getCampaigns()
+      this.campaignsCache = campaigns // Update cache
+      return campaigns
     } catch (error) {
-      console.error('❌ Failed to get campaigns:', error)
-      // Fallback to localStorage on database error
-      if (this.useDatabaseForOperations) {
-        console.log('🔄 Falling back to localStorage...')
-        const campaigns = this.getCampaignsFromLocalStorage()
-        this.campaignsCache = campaigns // Update cache
-        return campaigns
-      }
-      return []
+      console.error('❌ Failed to get campaigns from API:', error)
+      // Fallback to localStorage when API fails
+      console.log('🔄 Falling back to localStorage...')
+      const campaigns = this.getCampaignsFromLocalStorage()
+      this.campaignsCache = campaigns // Update cache
+      return campaigns
     }
   }
 
