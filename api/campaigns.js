@@ -99,17 +99,49 @@ export default function handler(req, res) {
 // Supabase Operations
 async function saveCampaignToSupabase(campaignData, req, res) {
   try {
+    // Ensure default user exists
+    const defaultUserId = '00000000-0000-0000-0000-000000000001';
+    console.log('👤 Ensuring default user exists...');
+    
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', defaultUserId)
+      .single();
+    
+    if (userCheckError && userCheckError.code === 'PGRST116') {
+      // User doesn't exist, create it
+      console.log('👤 Creating default user...');
+      const { error: userCreateError } = await supabase
+        .from('users')
+        .insert([{
+          id: defaultUserId,
+          email: 'demo@campaignbuilder.com',
+          name: 'Demo User',
+          settings: {}
+        }]);
+      
+      if (userCreateError) {
+        console.warn('⚠️ Could not create default user:', userCreateError.message);
+        // Continue anyway - user might already exist
+      } else {
+        console.log('✅ Default user created');
+      }
+    } else if (existingUser) {
+      console.log('✅ Default user already exists');
+    }
+
     // Map campaign data to database schema
     const campaignRecord = {
       id: campaignData.id,
-      user_id: 'default-user', // TODO: Replace with actual user ID from auth
+      userId: defaultUserId,
       name: campaignData.name || 'Untitled Campaign',
       type: campaignData.type || 'Display Campaign',
       status: campaignData.status || 'draft',
       source: campaignData.source || 'v2',
-      legacy_data: campaignData.adData || campaignData,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      legacyData: campaignData.adData || campaignData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
 
     // Insert campaign into Supabase
@@ -146,7 +178,7 @@ async function getCampaignsFromSupabase(req, res) {
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('createdAt', { ascending: false })
 
     if (error) {
       console.error('❌ Supabase select error:', error)
@@ -160,9 +192,9 @@ async function getCampaignsFromSupabase(req, res) {
       status: record.status,
       type: record.type,
       source: record.source,
-      created: new Date(record.created_at).toLocaleDateString(),
-      adData: record.legacy_data,
-      savedAt: record.updated_at
+      created: new Date(record.createdAt).toLocaleDateString(),
+      adData: record.legacyData,
+      savedAt: record.updatedAt
     }))
 
     console.log('✅ Loaded campaigns from Supabase:', campaigns.length)

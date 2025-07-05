@@ -331,9 +331,18 @@ app.all('/api/campaigns', async (req, res) => {
   try {
     // Initialize Supabase client if credentials are available
     let supabase = null;
+    console.log('🔍 Environment check:', {
+      hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      nodeEnv: process.env.NODE_ENV
+    });
+    
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { createClient } = require('@supabase/supabase-js');
       supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      console.log('✅ Supabase client initialized for campaigns endpoint');
+    } else {
+      console.log('⚠️ Supabase credentials not found, using file system fallback');
     }
 
     if (req.method === 'POST') {
@@ -344,28 +353,80 @@ app.all('/api/campaigns', async (req, res) => {
       // Generate campaign ID if not provided
       const campaignId = campaignData.id || `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
+      console.log('🆔 Campaign ID:', campaignId);
+      
       if (supabase) {
         // Use Supabase for production
         try {
+          console.log('📝 Preparing campaign record for Supabase...');
+          
+          // Ensure default user exists
+          const defaultUserId = '00000000-0000-0000-0000-000000000001';
+          console.log('👤 Ensuring default user exists...');
+          
+          const { data: existingUser, error: userCheckError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', defaultUserId)
+            .single();
+          
+          if (userCheckError && userCheckError.code === 'PGRST116') {
+            // User doesn't exist, create it
+            console.log('👤 Creating default user...');
+            const { error: userCreateError } = await supabase
+              .from('users')
+              .insert([{
+                id: defaultUserId,
+                email: 'demo@campaignbuilder.com',
+                name: 'Demo User',
+                settings: {}
+              }]);
+            
+            if (userCreateError) {
+              console.warn('⚠️ Could not create default user:', userCreateError.message);
+              // Continue anyway - user might already exist
+            } else {
+              console.log('✅ Default user created');
+            }
+          } else if (existingUser) {
+            console.log('✅ Default user already exists');
+          }
+          
           const campaignRecord = {
             id: campaignId,
-            user_id: 'default-user', // TODO: Replace with actual user ID from auth
+            userId: defaultUserId,
             name: campaignData.name || 'Untitled Campaign',
             type: campaignData.type || 'Display Campaign',
             status: campaignData.status || 'draft',
             source: campaignData.source || 'campaign-flow-v2',
-            legacy_data: campaignData.adData || campaignData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            legacyData: campaignData.adData || campaignData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
 
+          console.log('📋 Campaign record to insert:', {
+            id: campaignRecord.id,
+            userId: campaignRecord.userId,
+            name: campaignRecord.name,
+            type: campaignRecord.type,
+            status: campaignRecord.status,
+            source: campaignRecord.source,
+            hasLegacyData: !!campaignRecord.legacyData
+          });
+
+          console.log('🚀 Attempting Supabase insert...');
           const { data, error } = await supabase
             .from('campaigns')
             .insert([campaignRecord])
             .select();
 
           if (error) {
-            console.error('❌ Supabase insert error:', error);
+            console.error('❌ Supabase insert error details:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
             throw new Error(`Database error: ${error.message}`);
           }
 
@@ -415,7 +476,7 @@ app.all('/api/campaigns', async (req, res) => {
           const { data, error } = await supabase
             .from('campaigns')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('createdAt', { ascending: false });
 
           if (error) {
             console.error('❌ Supabase select error:', error);
@@ -428,9 +489,9 @@ app.all('/api/campaigns', async (req, res) => {
             status: record.status,
             type: record.type,
             source: record.source,
-            created: new Date(record.created_at).toLocaleDateString(),
-            adData: record.legacy_data,
-            savedAt: record.updated_at
+            created: new Date(record.createdAt).toLocaleDateString(),
+            adData: record.legacyData,
+            savedAt: record.updatedAt
           }));
 
           console.log('✅ Loaded campaigns from Supabase:', campaigns.length);
