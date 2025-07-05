@@ -237,13 +237,21 @@ export default async function handler(req, res) {
     const connectionString = process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL;
     
     if (!connectionString) {
+      console.log('Available env vars:', Object.keys(process.env).filter(key => key.includes('POSTGRES') || key.includes('DATABASE')));
       throw new Error('No database connection string found. Expected POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL');
     }
+    
+    console.log('Connection string type:', connectionString.substring(0, 20) + '...');
 
     console.log('🔗 Connecting to database...');
+    // Configure SSL for Supabase connections
+    const sslConfig = connectionString.includes('supabase.co') || connectionString.includes('postgres://') 
+      ? { rejectUnauthorized: false } 
+      : false;
+    
     client = new Client({
       connectionString: connectionString,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      ssl: sslConfig
     });
 
     await client.connect();
