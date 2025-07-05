@@ -329,62 +329,142 @@ app.post('/api/fetch-product-image', async (req, res) => {
 // Campaign endpoint for full campaign saves (Campaign Flow V2)
 app.all('/api/campaigns', async (req, res) => {
   try {
+    // Initialize Supabase client if credentials are available
+    let supabase = null;
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { createClient } = require('@supabase/supabase-js');
+      supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    }
+
     if (req.method === 'POST') {
       // Save complete campaign
       const campaignData = req.body;
       console.log('📋 Saving complete campaign:', campaignData.id || campaignData.name);
       
-      const fs = require('fs');
-      const path = require('path');
-      
-      // Create campaigns directory
-      const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
-      if (!fs.existsSync(campaignsDir)) {
-        fs.mkdirSync(campaignsDir, { recursive: true });
-      }
-      
       // Generate campaign ID if not provided
       const campaignId = campaignData.id || `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Save campaign to file
-      const campaignFile = path.join(campaignsDir, `${campaignId}.json`);
-      const savedCampaign = {
-        ...campaignData,
-        id: campaignId,
-        savedAt: new Date().toISOString(),
-        source: 'campaign-flow-v2'
-      };
-      
-      fs.writeFileSync(campaignFile, JSON.stringify(savedCampaign, null, 2));
-      
-      console.log('✅ Campaign saved to file:', campaignFile);
-      res.json({ success: true, campaign: savedCampaign });
+      if (supabase) {
+        // Use Supabase for production
+        try {
+          const campaignRecord = {
+            id: campaignId,
+            user_id: 'default-user', // TODO: Replace with actual user ID from auth
+            name: campaignData.name || 'Untitled Campaign',
+            type: campaignData.type || 'Display Campaign',
+            status: campaignData.status || 'draft',
+            source: campaignData.source || 'campaign-flow-v2',
+            legacy_data: campaignData.adData || campaignData,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          const { data, error } = await supabase
+            .from('campaigns')
+            .insert([campaignRecord])
+            .select();
+
+          if (error) {
+            console.error('❌ Supabase insert error:', error);
+            throw new Error(`Database error: ${error.message}`);
+          }
+
+          console.log('✅ Campaign saved to Supabase:', data[0]?.id);
+          
+          const savedCampaign = {
+            ...campaignData,
+            id: campaignId,
+            savedAt: new Date().toISOString(),
+            source: 'campaign-flow-v2',
+            databaseId: data[0]?.id
+          };
+
+          res.json({ success: true, campaign: savedCampaign });
+        } catch (error) {
+          console.error('❌ Failed to save campaign to Supabase:', error);
+          res.status(500).json({ success: false, error: error.message });
+        }
+      } else {
+        // Fallback to file system for development
+        const fs = require('fs');
+        const path = require('path');
+        
+        const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
+        if (!fs.existsSync(campaignsDir)) {
+          fs.mkdirSync(campaignsDir, { recursive: true });
+        }
+        
+        const campaignFile = path.join(campaignsDir, `${campaignId}.json`);
+        const savedCampaign = {
+          ...campaignData,
+          id: campaignId,
+          savedAt: new Date().toISOString(),
+          source: 'campaign-flow-v2'
+        };
+        
+        fs.writeFileSync(campaignFile, JSON.stringify(savedCampaign, null, 2));
+        console.log('✅ Campaign saved to file:', campaignFile);
+        res.json({ success: true, campaign: savedCampaign });
+      }
       
     } else if (req.method === 'GET') {
       // Get all campaigns
-      const fs = require('fs');
-      const path = require('path');
-      
-      const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
-      
-      if (!fs.existsSync(campaignsDir)) {
-        res.json({ success: true, campaigns: [] });
-        return;
-      }
-      
-      const campaignFiles = fs.readdirSync(campaignsDir).filter(f => f.endsWith('.json'));
-      const campaigns = campaignFiles.map(file => {
+      if (supabase) {
+        // Use Supabase for production
         try {
-          const filePath = path.join(campaignsDir, file);
-          const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-          return data;
+          const { data, error } = await supabase
+            .from('campaigns')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (error) {
+            console.error('❌ Supabase select error:', error);
+            throw new Error(`Database error: ${error.message}`);
+          }
+
+          const campaigns = data.map(record => ({
+            id: record.id,
+            name: record.name,
+            status: record.status,
+            type: record.type,
+            source: record.source,
+            created: new Date(record.created_at).toLocaleDateString(),
+            adData: record.legacy_data,
+            savedAt: record.updated_at
+          }));
+
+          console.log('✅ Loaded campaigns from Supabase:', campaigns.length);
+          res.json({ success: true, campaigns });
         } catch (error) {
-          console.warn('Failed to read campaign file:', file, error);
-          return null;
+          console.error('❌ Failed to get campaigns from Supabase:', error);
+          res.status(500).json({ success: false, error: error.message });
         }
-      }).filter(Boolean);
-      
-      res.json({ success: true, campaigns });
+      } else {
+        // Fallback to file system for development
+        const fs = require('fs');
+        const path = require('path');
+        
+        const campaignsDir = path.join(process.cwd(), 'tmp', 'campaigns');
+        
+        if (!fs.existsSync(campaignsDir)) {
+          res.json({ success: true, campaigns: [] });
+          return;
+        }
+        
+        const campaignFiles = fs.readdirSync(campaignsDir).filter(f => f.endsWith('.json'));
+        const campaigns = campaignFiles.map(file => {
+          try {
+            const filePath = path.join(campaignsDir, file);
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return data;
+          } catch (error) {
+            console.warn('Failed to read campaign file:', file, error);
+            return null;
+          }
+        }).filter(Boolean);
+        
+        res.json({ success: true, campaigns });
+      }
       
     } else {
       res.status(405).json({ error: 'Method not allowed' });
