@@ -332,14 +332,14 @@ app.all('/api/campaigns', async (req, res) => {
     // Initialize Supabase client if credentials are available
     let supabase = null;
     console.log('🔍 Environment check:', {
-      hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
       hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       nodeEnv: process.env.NODE_ENV
     });
     
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { createClient } = require('@supabase/supabase-js');
-      supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
       console.log('✅ Supabase client initialized for campaigns endpoint');
     } else {
       console.log('⚠️ Supabase credentials not found, using file system fallback');
@@ -446,7 +446,18 @@ app.all('/api/campaigns', async (req, res) => {
           res.status(500).json({ success: false, error: error.message });
         }
       } else {
-        // Fallback to file system for development
+        // No Supabase credentials available
+        console.error('❌ Supabase credentials not found in environment');
+        
+        // In serverless environments like Vercel, we can't write to filesystem
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials in your environment variables.' 
+          });
+        }
+        
+        // Only use file system in local development
         const fs = require('fs');
         const path = require('path');
         
@@ -501,7 +512,15 @@ app.all('/api/campaigns', async (req, res) => {
           res.status(500).json({ success: false, error: error.message });
         }
       } else {
-        // Fallback to file system for development
+        // No Supabase credentials available
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials.' 
+          });
+        }
+        
+        // Only use file system in local development
         const fs = require('fs');
         const path = require('path');
         

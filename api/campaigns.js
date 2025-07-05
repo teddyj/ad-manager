@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 // Initialize Supabase client
-const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 let supabase = null
@@ -47,7 +47,15 @@ export default function handler(req, res) {
         // Use Supabase for production
         getCampaignsFromSupabase(req, res)
       } else {
-        // Fallback to file system for development
+        // No Supabase credentials available
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials.' 
+          });
+        }
+        
+        // Only use file system in local development
         getCampaignsFromFiles(req, res)
       }
     } else if (req.method === 'POST') {
@@ -64,7 +72,23 @@ export default function handler(req, res) {
         // Use Supabase for production
         saveCampaignToSupabase(campaignData, req, res)
       } else {
-        // Fallback to file system for development
+        // No Supabase credentials available
+        console.error('❌ Supabase credentials not found in environment');
+        console.log('Environment check:', {
+          hasSupabaseUrl: !!supabaseUrl,
+          hasServiceKey: !!supabaseServiceKey,
+          nodeEnv: process.env.NODE_ENV
+        });
+        
+        // In serverless environments like Vercel, we can't write to filesystem
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials.' 
+          });
+        }
+        
+        // Only use file system in local development
         saveCampaignToFiles(campaignData, req, res)
       }
     } else if (req.method === 'DELETE') {
@@ -81,7 +105,15 @@ export default function handler(req, res) {
         // Use Supabase for production
         deleteCampaignFromSupabase(id, req, res)
       } else {
-        // Fallback to file system for development
+        // No Supabase credentials available
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials.' 
+          });
+        }
+        
+        // Only use file system in local development
         deleteCampaignFromFiles(id, req, res)
       }
     } else {
