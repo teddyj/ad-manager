@@ -1,20 +1,68 @@
 /**
- * Database Schema Deployment API Endpoint
- * This endpoint deploys the Prisma schema to Supabase database
- * Following the established database-first strategy
+ * Database Setup Information API Endpoint
+ * This endpoint provides the SQL commands needed to set up the database
+ * Since we can't execute SQL directly, this provides instructions
  */
 
-import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req, res) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// Essential tables SQL that needs to be run in Supabase SQL Editor
+const SETUP_SQL = `-- Essential tables for Campaign Builder
+-- Run this SQL in your Supabase SQL Editor
 
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255),
+    avatar_url VARCHAR(255),
+    settings JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Campaigns table
+CREATE TABLE IF NOT EXISTS campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id UUID,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'draft',
+    budget DECIMAL(10, 2),
+    currency VARCHAR(10) DEFAULT 'USD',
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    launched_at TIMESTAMPTZ,
+    audience_config JSONB DEFAULT '{}',
+    platform_config JSONB DEFAULT '{}',
+    creative_config JSONB DEFAULT '{}',
+    publish_config JSONB DEFAULT '{}',
+    legacy_data JSONB DEFAULT '{}',
+    source VARCHAR(50) DEFAULT 'v2',
+    legacy_id VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON campaigns(user_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns(created_at);
+CREATE INDEX IF NOT EXISTS idx_campaigns_source ON campaigns(source);
+CREATE INDEX IF NOT EXISTS idx_campaigns_legacy_id ON campaigns(legacy_id);
+
+-- Create default user
+INSERT INTO users (id, email, name, settings) 
+VALUES ('00000000-0000-0000-0000-000000000001', 'default@example.com', 'Default User', '{}')
+ON CONFLICT (id) DO NOTHING;`;
+
+export default async function handler(req, res) {
   try {
-    console.log('🚀 Starting Prisma schema deployment...');
+    console.log('🔍 Checking database setup status...');
 
     // Get Supabase credentials
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,130 +76,86 @@ export default async function handler(req, res) {
       throw new Error('Missing Supabase credentials. Expected SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
-    // Test Supabase connection first
-    console.log('🔍 Testing Supabase connection...');
+    console.log('🔗 Testing Supabase connection...');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Simple connection test
-    const { data: testData, error: testError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .limit(1);
 
-    if (testError) {
-      console.error('Supabase connection test failed:', testError);
-      throw new Error(`Supabase connection failed: ${testError.message}`);
-    }
+    // Check if tables exist
+    let tablesExist = false;
+    let userCount = 0;
+    let campaignCount = 0;
+    let setupNeeded = true;
 
-    console.log('✅ Supabase connection successful');
-
-    // Set up DATABASE_URL for Prisma
-    const databaseUrl = process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL;
-    
-    if (!databaseUrl) {
-      throw new Error('No DATABASE_URL found. Expected POSTGRES_PRISMA_URL, POSTGRES_URL, or DATABASE_URL');
-    }
-
-    console.log('📊 Deploying Prisma schema to database...');
-    
-    // Use Prisma to push schema (this is the established approach)
     try {
-      // Set environment variable for this process
-      process.env.DATABASE_URL = databaseUrl;
-      
-      // Run Prisma db push to create tables
-      console.log('Running: npx prisma db push --accept-data-loss');
-      execSync('npx prisma db push --accept-data-loss', { 
-        stdio: 'inherit',
-        env: { ...process.env, DATABASE_URL: databaseUrl }
-      });
-      
-      console.log('✅ Prisma schema deployed successfully');
-      
-    } catch (execError) {
-      console.error('Prisma deployment failed:', execError);
-      throw new Error(`Prisma deployment failed: ${execError.message}`);
-    }
-
-    // Create default user using Supabase client
-    console.log('👤 Creating default user...');
-    const defaultUserId = '00000000-0000-0000-0000-000000000001';
-    
-    const { data: existingUser, error: userCheckError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', defaultUserId)
-      .single();
-
-    if (userCheckError && userCheckError.code !== 'PGRST116') {
-      console.log('User check error:', userCheckError);
-    }
-
-    if (!existingUser) {
-      const { data: newUser, error: userCreateError } = await supabase
+      // Try to count users and campaigns
+      const { count: users, error: userError } = await supabase
         .from('users')
-        .insert({
-          id: defaultUserId,
-          email: 'default@example.com',
-          name: 'Default User',
-          settings: {}
-        })
-        .select()
-        .single();
-
-      if (userCreateError) {
-        console.log('User creation error:', userCreateError);
-        throw new Error(`Failed to create default user: ${userCreateError.message}`);
-      }
+        .select('*', { count: 'exact', head: true });
       
-      console.log('✅ Default user created:', newUser.id);
-    } else {
-      console.log('✅ Default user already exists');
-    }
+      const { count: campaigns, error: campaignError } = await supabase
+        .from('campaigns')
+        .select('*', { count: 'exact', head: true });
 
-    // Test the setup by counting records
-    console.log('🧪 Testing database setup...');
-    const { count: userCount, error: userCountError } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true });
-
-    const { count: campaignCount, error: campaignCountError } = await supabase
-      .from('campaigns')
-      .select('*', { count: 'exact', head: true });
-
-    if (userCountError || campaignCountError) {
-      console.log('Count errors:', { userCountError, campaignCountError });
-    }
-
-    console.log(`✅ Found ${userCount || 0} users and ${campaignCount || 0} campaigns`);
-    console.log('🎉 Database migration completed successfully!');
-
-    res.status(200).json({
-      success: true,
-      message: 'Database migration completed successfully',
-      details: {
-        schemaDeployed: true,
-        defaultUserCreated: !existingUser,
-        userCount: userCount || 0,
-        campaignCount: campaignCount || 0,
-        supabaseUrl: supabaseUrl,
-        tablesCreated: true
+      if (!userError && !campaignError) {
+        tablesExist = true;
+        setupNeeded = false;
+        userCount = users || 0;
+        campaignCount = campaigns || 0;
+        console.log('✅ Tables already exist');
       }
-    });
+    } catch (error) {
+      console.log('ℹ️  Tables do not exist yet (this is expected for first setup)');
+    }
+
+    if (setupNeeded) {
+      console.log('📋 Database setup is needed');
+      
+      res.status(200).json({
+        success: false,
+        setupNeeded: true,
+        message: 'Database tables need to be created',
+        instructions: {
+          step1: 'Go to your Supabase project dashboard',
+          step2: 'Navigate to SQL Editor',
+          step3: 'Copy and paste the SQL below',
+          step4: 'Click "Run" to execute the SQL',
+          step5: 'Call this endpoint again to verify setup'
+        },
+        sql: SETUP_SQL,
+        supabaseUrl: supabaseUrl.replace('https://', '').replace('.supabase.co', ''),
+        dashboardUrl: `https://app.supabase.com/project/${supabaseUrl.replace('https://', '').replace('.supabase.co', '')}`
+      });
+    } else {
+      console.log('✅ Database is properly set up');
+      
+      res.status(200).json({
+        success: true,
+        setupNeeded: false,
+        message: 'Database is properly configured',
+        details: {
+          tablesExist: true,
+          userCount: userCount,
+          campaignCount: campaignCount,
+          supabaseUrl: supabaseUrl
+        },
+        nextSteps: [
+          'Your database is ready!',
+          'Try creating a campaign at https://ad-manager-gamma.vercel.app',
+          'Campaigns should now save to the database and persist across sessions'
+        ]
+      });
+    }
 
   } catch (error) {
-    console.error('❌ Database migration failed:', error);
+    console.error('❌ Database check failed:', error);
     
     res.status(500).json({
       success: false,
-      message: 'Database migration failed',
+      message: 'Database check failed',
       error: error.message,
       troubleshooting: [
         'Check that your Supabase credentials are correct in Vercel environment',
         'Verify your Supabase project is active and accessible',
-        'Ensure POSTGRES_PRISMA_URL or DATABASE_URL is set correctly',
-        'Check the Vercel function logs for more detailed error information',
-        'Make sure Prisma schema is valid and up to date'
+        'Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel'
       ]
     });
   }
