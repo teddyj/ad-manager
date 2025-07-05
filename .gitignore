@@ -33,3 +33,5 @@ dist-ssr
 
 # Temporary files and drafts
 tmp/
+.env*.local
+.env.production
