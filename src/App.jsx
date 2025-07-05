@@ -5483,8 +5483,19 @@ function App() {
     };
 
     const handleCampaignClick = (campaign) => {
-        setSelectedCampaign(campaign);
-        setAppView(APP_VIEW_CAMPAIGN_DETAILS);
+        // Smart routing based on campaign source and V2 availability
+        if (isFeatureEnabled('NEW_CAMPAIGN_FLOW')) {
+            // Route all campaigns to V2 flow for editing (deprecate old details view)
+            setSelectedCampaign(campaign);
+            setAppView(APP_VIEW_CAMPAIGN_FLOW_V2);
+            
+            // Set URL hash for V2 editing mode
+            window.history.replaceState(null, '', '#campaign-flow-v2');
+        } else {
+            // Fallback to details view if V2 is not enabled
+            setSelectedCampaign(campaign);
+            setAppView(APP_VIEW_CAMPAIGN_DETAILS);
+        }
     };
 
     const handleBackToCampaigns = () => {
@@ -5562,18 +5573,307 @@ function App() {
         setCampaignSettings(null);
     };
 
+    // Prepare initial data for V2 flow (handles both new campaigns and editing existing ones)
+    const getV2InitialData = () => {
+        // If editing an existing campaign
+        if (selectedCampaign) {
+            console.log('🔄 Preparing V2 initial data for editing campaign:', selectedCampaign.name);
+            
+            // Check if this is already a V2 campaign with preserved data
+            if (selectedCampaign.source === 'v2' && selectedCampaign.adData?.v2Data) {
+                console.log('✅ Loading V2 campaign data');
+                return {
+                    id: selectedCampaign.id, // Preserve original ID
+                    name: selectedCampaign.name,
+                    status: selectedCampaign.status || 'draft',
+                    createdAt: selectedCampaign.createdAt || selectedCampaign.created || new Date().toISOString(),
+                    version: 2,
+                    isEditMode: true, // Mark as edit mode
+                    // Restore the original V2 step data
+                    product: selectedCampaign.adData.v2Data.product || null,
+                    audience: selectedCampaign.adData.v2Data.audience || null,
+                    platforms: selectedCampaign.adData.v2Data.platforms || [],
+                    creative: selectedCampaign.adData.v2Data.creative || {},
+                    publish: selectedCampaign.adData.v2Data.publish || null
+                };
+            } else {
+                // Legacy campaign - migrate to V2 format
+                console.log('🔄 Migrating legacy campaign to V2 format');
+                console.log('🔍 Legacy campaign adData:', selectedCampaign.adData);
+                
+                // Enhanced legacy data extraction
+                const legacyData = selectedCampaign.adData || {};
+                
+                // Extract product data from various legacy formats
+                const extractProductData = () => {
+                    if (legacyData.productData) return legacyData.productData;
+                    
+                    // Try to extract from legacy ad data structure
+                    const productInfo = {
+                        name: legacyData.productName || legacyData.headline || selectedCampaign.name || 'Legacy Product',
+                        brand: legacyData.brandName || legacyData.brand || '',
+                        description: legacyData.description || legacyData.productDescription || '',
+                        category: legacyData.category || legacyData.productCategory || 'general',
+                        price: legacyData.price || legacyData.productPrice || '',
+                        url: legacyData.clickUrl || legacyData.productUrl || legacyData.url || '',
+                        images: [],
+                        // Enhanced metadata preservation
+                        tags: legacyData.tags || legacyData.productTags || [],
+                        targetDemographic: legacyData.targetDemographic || legacyData.audienceType || '',
+                        seasonality: legacyData.seasonality || '',
+                        priceRange: legacyData.priceRange || 'mid'
+                    };
+                    
+                    // Extract images from legacy format with enhanced metadata
+                    if (legacyData.imageSrc) {
+                        productInfo.images = [{ 
+                            id: 'legacy-image-1',
+                            url: legacyData.imageSrc, 
+                            isPrimary: true,
+                            altText: productInfo.name || 'Product Image',
+                            metadata: {
+                                sourceType: 'legacy',
+                                processingStatus: 'completed'
+                            }
+                        }];
+                    } else if (legacyData.productImages) {
+                        productInfo.images = Array.isArray(legacyData.productImages) 
+                            ? legacyData.productImages.map((img, index) => ({
+                                id: `legacy-image-${index + 1}`,
+                                url: typeof img === 'string' ? img : img.url,
+                                isPrimary: index === 0,
+                                altText: typeof img === 'object' ? img.altText : `${productInfo.name} Image ${index + 1}`,
+                                metadata: {
+                                    sourceType: 'legacy',
+                                    processingStatus: 'completed'
+                                }
+                            }))
+                            : [{ 
+                                id: 'legacy-image-1',
+                                url: legacyData.productImages, 
+                                isPrimary: true,
+                                altText: productInfo.name || 'Product Image',
+                                metadata: {
+                                    sourceType: 'legacy',
+                                    processingStatus: 'completed'
+                                }
+                            }];
+                    } else if (legacyData.images) {
+                        productInfo.images = Array.isArray(legacyData.images) 
+                            ? legacyData.images.map((img, index) => ({
+                                id: `legacy-image-${index + 1}`,
+                                url: typeof img === 'string' ? img : img.url,
+                                isPrimary: index === 0,
+                                altText: typeof img === 'object' ? img.altText : `${productInfo.name} Image ${index + 1}`,
+                                metadata: {
+                                    sourceType: 'legacy',
+                                    processingStatus: 'completed'
+                                }
+                            }))
+                            : [{ 
+                                id: 'legacy-image-1',
+                                url: legacyData.images, 
+                                isPrimary: true,
+                                altText: productInfo.name || 'Product Image',
+                                metadata: {
+                                    sourceType: 'legacy',
+                                    processingStatus: 'completed'
+                                }
+                            }];
+                    }
+                    
+                    // Try to extract additional product data from campaign settings
+                    if (selectedCampaign.productId && selectedCampaign.adData) {
+                        // Look for product data in campaign settings
+                        const campaignProduct = selectedCampaign.adData.product;
+                        if (campaignProduct) {
+                            productInfo.name = campaignProduct.name || productInfo.name;
+                            productInfo.brand = campaignProduct.brand || productInfo.brand;
+                            productInfo.description = campaignProduct.description || productInfo.description;
+                            productInfo.category = campaignProduct.category || productInfo.category;
+                            productInfo.price = campaignProduct.price || productInfo.price;
+                            productInfo.url = campaignProduct.url || productInfo.url;
+                            productInfo.tags = campaignProduct.tags || productInfo.tags;
+                            productInfo.targetDemographic = campaignProduct.targetDemographic || productInfo.targetDemographic;
+                            productInfo.seasonality = campaignProduct.seasonality || productInfo.seasonality;
+                            productInfo.priceRange = campaignProduct.priceRange || productInfo.priceRange;
+                            
+                            // Merge images if available
+                            if (campaignProduct.images && campaignProduct.images.length > 0) {
+                                productInfo.images = campaignProduct.images.map((img, index) => ({
+                                    id: img.id || `campaign-image-${index + 1}`,
+                                    url: img.url || img.src || img,
+                                    isPrimary: img.isPrimary || index === 0,
+                                    altText: img.altText || `${productInfo.name} Image ${index + 1}`,
+                                    metadata: {
+                                        sourceType: 'campaign',
+                                        processingStatus: 'completed',
+                                        ...img.metadata
+                                    }
+                                }));
+                            }
+                        }
+                    }
+                    
+                    console.log('📦 Enhanced extracted product data:', productInfo);
+                    return productInfo.name ? productInfo : null;
+                };
+                
+                // Extract audience data from legacy format
+                const extractAudienceData = () => {
+                    if (legacyData.audienceData) return legacyData.audienceData;
+                    
+                    // Create basic audience from legacy targeting data
+                    const audienceInfo = {
+                        name: 'Legacy Audience',
+                        demographics: {
+                            age: legacyData.targetAge || [25, 54],
+                            gender: legacyData.targetGender || 'all',
+                            income: 'any',
+                            education: 'any'
+                        },
+                        locations: {
+                            countries: legacyData.targetCountries || ['US'],
+                            regions: [],
+                            cities: []
+                        },
+                        interests: legacyData.targetInterests || [],
+                        behaviors: [],
+                        estimatedSize: legacyData.estimatedReach || 50000
+                    };
+                    
+                    console.log('🎯 Extracted audience data:', audienceInfo);
+                    return audienceInfo;
+                };
+                
+                // Extract platform data from legacy format
+                const extractPlatformData = () => {
+                    if (legacyData.platformData) return legacyData.platformData;
+                    
+                    const platformInfo = {
+                        selectedPlatforms: legacyData.platforms || ['meta'],
+                        totalBudget: legacyData.budget || legacyData.totalBudget || 1000,
+                        budgetAllocation: 'auto',
+                        campaignObjective: legacyData.objective || 'awareness',
+                        duration: legacyData.duration || 7,
+                        startDate: legacyData.startDate || new Date().toISOString().split('T')[0]
+                    };
+                    
+                    console.log('🚀 Extracted platform data:', platformInfo);
+                    return platformInfo;
+                };
+                
+                // Extract creative data from legacy format
+                const extractCreativeData = () => {
+                    if (legacyData.creativeData) return legacyData.creativeData;
+                    
+                    const creativeInfo = {
+                        selectedFormats: ['square'], // Default format
+                        creatives: {},
+                        generationSettings: {
+                            style: 'modern',
+                            tone: 'professional',
+                            includePrice: true,
+                            includeCTA: true
+                        },
+                        variations: 1,
+                        aiGenerated: false
+                    };
+                    
+                    // If we have legacy creative data, try to convert it
+                    if (legacyData.headline || legacyData.description || legacyData.imageSrc) {
+                        creativeInfo.creatives['square_1'] = {
+                            id: 'square_1',
+                            formatId: 'square',
+                            elements: [
+                                {
+                                    type: 'text',
+                                    content: legacyData.headline || 'Legacy Headline',
+                                    style: { fontSize: 24, fontWeight: 'bold' }
+                                },
+                                {
+                                    type: 'text', 
+                                    content: legacyData.description || 'Legacy Description',
+                                    style: { fontSize: 16 }
+                                }
+                            ]
+                        };
+                        
+                        if (legacyData.imageSrc) {
+                            creativeInfo.creatives['square_1'].elements.unshift({
+                                type: 'image',
+                                content: legacyData.imageSrc
+                            });
+                        }
+                    }
+                    
+                    console.log('🎨 Extracted creative data:', creativeInfo);
+                    return creativeInfo;
+                };
+                
+                // Extract publish data from legacy format
+                const extractPublishData = () => {
+                    if (legacyData.publishData) return legacyData.publishData;
+                    
+                    return {
+                        campaignName: selectedCampaign.name || 'Legacy Campaign',
+                        saved: true,
+                        savedAt: selectedCampaign.createdAt || selectedCampaign.created || new Date().toISOString(),
+                        status: selectedCampaign.status || 'draft'
+                    };
+                };
+                
+                return {
+                    id: selectedCampaign.id, // Preserve original ID
+                    name: selectedCampaign.name,
+                    status: selectedCampaign.status || 'draft',
+                    createdAt: selectedCampaign.createdAt || selectedCampaign.created || new Date().toISOString(),
+                    version: 2,
+                    isEditMode: true, // Mark as edit mode
+                    // Enhanced data extraction
+                    product: extractProductData(),
+                    audience: extractAudienceData(),
+                    platforms: extractPlatformData(),
+                    creative: extractCreativeData(),
+                    publish: extractPublishData()
+                };
+            }
+        }
+        
+        // If creating new campaign with selected product
+        if (selectedProduct) {
+            console.log('🆕 Preparing V2 initial data for new campaign with product:', selectedProduct.name);
+            return { 
+                product: selectedProduct,
+                name: `${selectedProduct.name} Campaign`,
+                version: 2,
+                isEditMode: false // Explicitly mark as new campaign
+            };
+        }
+        
+        // Default for new campaign
+        console.log('🆕 Preparing V2 initial data for new campaign');
+        return { 
+            version: 2,
+            name: `Campaign ${new Date().getFullYear()}`,
+            isEditMode: false // Explicitly mark as new campaign
+        };
+    };
+
     // V2 Campaign Flow handlers
     const handleCampaignFlowV2Complete = (campaignData) => {
         console.log('Campaign Flow V2 completed:', campaignData);
         // Return to campaign manager after completion
         setAppView(APP_VIEW_CAMPAIGN_MANAGER);
         setSelectedProduct(null);
+        setSelectedCampaign(null); // Clear selected campaign when done editing
     };
 
     const handleCampaignFlowV2Cancel = () => {
         // Return to campaign manager if cancelled
         setAppView(APP_VIEW_CAMPAIGN_MANAGER);
         setSelectedProduct(null);
+        setSelectedCampaign(null); // Clear selected campaign when cancelled
     };
 
     // --- Render Logic ---
@@ -5737,7 +6037,7 @@ function App() {
                                 <CampaignFlowV2
                                     onComplete={handleCampaignFlowV2Complete}
                                     onCancel={handleCampaignFlowV2Cancel}
-                                    initialData={selectedProduct ? { product: selectedProduct } : {}}
+                                    initialData={getV2InitialData()}
                                     dbOperations={dbOperations}
                                 />
                             ) : (

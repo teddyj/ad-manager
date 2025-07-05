@@ -263,8 +263,11 @@ const PublishManager = ({
     setIsSaving(true);
     
     try {
-      // Generate campaign ID
-      const campaignId = `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use existing campaign ID if in edit mode, otherwise generate new one
+      const campaignId = campaignData?.id || `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const isEditMode = campaignData?.isEditMode || false;
+      
+      console.log('💾 Save campaign:', { campaignId, isEditMode, campaignName: publishData.campaignName });
       
       // Update publish data
       const savedCampaignData = {
@@ -272,7 +275,7 @@ const PublishManager = ({
         saved: true,
         savedAt: new Date().toISOString(),
         campaignId,
-        status: 'draft'
+        status: isEditMode ? (campaignData.status || 'draft') : 'draft' // Preserve existing status in edit mode
       };
       
       setPublishData(savedCampaignData);
@@ -283,15 +286,16 @@ const PublishManager = ({
       const campaignToSave = {
         id: campaignId,
         name: publishData.campaignName || 'Untitled Campaign V2',
-        status: 'Draft',
+        status: isEditMode ? (campaignData.status || 'Draft') : 'Draft',
         info: true,  // ✅ Show checkmark in info column
-        created: new Date().toLocaleDateString(), // ✅ Required for date display
+        created: isEditMode ? (campaignData.createdAt ? new Date(campaignData.createdAt).toLocaleDateString() : new Date().toLocaleDateString()) : new Date().toLocaleDateString(), // ✅ Preserve original creation date in edit mode
         type: 'Display Campaign V2', // ✅ Required for type column
         budget: '$0.00', // ✅ Required for budget column  
         starts: 'Not Set', // ✅ Required for starts column
         ends: 'Not Set', // ✅ Required for ends column
-        createdAt: new Date().toISOString(), // Keep for compatibility
+        createdAt: isEditMode ? (campaignData.createdAt || new Date().toISOString()) : new Date().toISOString(), // Preserve original timestamp
         source: 'v2', // ✅ Mark as V2 campaign for badge display
+        isEditMode, // Add edit mode flag for debugging
         // Legacy adData structure that Campaign Manager expects
         adData: {
           campaignName: publishData.campaignName || 'Untitled Campaign V2',

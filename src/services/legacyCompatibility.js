@@ -179,6 +179,61 @@ export class LegacyCompatibilityService {
   }
 
   /**
+   * Update existing campaign - new method for edit mode
+   */
+  async updateCampaign(campaignId, updates) {
+    try {
+      console.log('📝 Updating campaign via HTTP API:', campaignId)
+      
+      // Create campaign object for API update
+      const campaignData = {
+        id: campaignId,
+        name: updates.campaignName || updates.name || 'Untitled Campaign',
+        status: updates.status || 'draft',
+        updatedAt: new Date().toISOString(),
+        adData: updates
+      }
+      
+      // Make HTTP PUT request to backend API
+      const response = await fetch('/api/campaigns', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(campaignData)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        // Transform back to legacy format for compatibility
+        const legacyCampaign = {
+          id: campaignId,
+          name: campaignData.name,
+          status: 'Draft',
+          info: true,
+          created: new Date().toLocaleDateString(),
+          type: 'Display Campaign',
+          budget: '$0.00',
+          starts: 'Not Set',
+          ends: 'Not Set',
+          adData: updates
+        }
+        return { success: true, campaign: legacyCampaign }
+      }
+      
+      return result
+    } catch (error) {
+      console.error('❌ Legacy updateCampaign failed:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
    * Legacy clearOldCampaigns operation
    */
   async clearOldCampaigns() {

@@ -91,6 +91,31 @@ export default function handler(req, res) {
         // Only use file system in local development
         saveCampaignToFiles(campaignData, req, res)
       }
+    } else if (req.method === 'PUT') {
+      // Update existing campaign
+      const campaignData = req.body
+      
+      if (!campaignData.id) {
+        return res.status(400).json({ error: 'Campaign ID required' })
+      }
+
+      console.log('📋 Updating campaign:', campaignData.id || campaignData.name)
+      
+      if (supabase) {
+        // Use Supabase for production
+        updateCampaignInSupabase(campaignData, req, res)
+      } else {
+        // No Supabase credentials available
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database connection not available. Please configure Supabase credentials.' 
+          });
+        }
+        
+        // Only use file system in local development
+        updateCampaignInFiles(campaignData, req, res)
+      }
     } else if (req.method === 'DELETE') {
       // Delete campaign
       const { id } = req.query || req.body
@@ -163,17 +188,18 @@ async function saveCampaignToSupabase(campaignData, req, res) {
       console.log('✅ Default user already exists');
     }
 
-    // Map campaign data to database schema
+    // Map campaign data to database schema (using snake_case column names)
+    // Note: Let database generate UUID for id, store original ID in legacy_id
     const campaignRecord = {
-      id: campaignData.id,
-      userId: defaultUserId,
+      user_id: defaultUserId,
       name: campaignData.name || 'Untitled Campaign',
       type: campaignData.type || 'Display Campaign',
       status: campaignData.status || 'draft',
       source: campaignData.source || 'v2',
-      legacyData: campaignData.adData || campaignData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      legacy_data: campaignData.adData || campaignData,
+      legacy_id: campaignData.id, // Store original campaign ID here
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
 
     // Insert campaign into Supabase
@@ -205,28 +231,81 @@ async function saveCampaignToSupabase(campaignData, req, res) {
   }
 }
 
+async function updateCampaignInSupabase(campaignData, req, res) {
+  try {
+    console.log('📝 Updating campaign in Supabase:', campaignData.id);
+
+    // Map campaign data to database schema (using snake_case column names)
+    const campaignRecord = {
+      name: campaignData.name || 'Untitled Campaign',
+      type: campaignData.type || 'Display Campaign',
+      status: campaignData.status || 'draft',
+      source: campaignData.source || 'v2',
+      legacy_data: campaignData.adData || campaignData,
+      updated_at: new Date().toISOString()
+    }
+
+    // Update campaign in Supabase using legacy_id (original campaign ID)
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update(campaignRecord)
+      .eq('legacy_id', campaignData.id)
+      .select()
+
+    if (error) {
+      console.error('❌ Supabase update error:', error)
+      throw new Error(`Database error: ${error.message}`)
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('⚠️ No campaign found with ID:', campaignData.id);
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Campaign not found' 
+      });
+    }
+
+    console.log('✅ Campaign updated in Supabase:', data[0]?.id)
+    
+    const updatedCampaign = {
+      ...campaignData,
+      updatedAt: new Date().toISOString(),
+      databaseId: data[0]?.id
+    }
+
+    res.json({ success: true, campaign: updatedCampaign })
+  } catch (error) {
+    console.error('❌ Failed to update campaign in Supabase:', error)
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    })
+  }
+}
+
 async function getCampaignsFromSupabase(req, res) {
   try {
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .order('createdAt', { ascending: false })
+      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('❌ Supabase select error:', error)
       throw new Error(`Database error: ${error.message}`)
     }
 
-    // Transform database records back to expected format
+    // Transform database records back to expected format (snake_case to camelCase)
     const campaigns = data.map(record => ({
-      id: record.id,
+      id: record.legacy_id || record.id, // Use original campaign ID from legacy_id
       name: record.name,
       status: record.status,
       type: record.type,
       source: record.source,
-      created: new Date(record.createdAt).toLocaleDateString(),
-      adData: record.legacyData,
-      savedAt: record.updatedAt
+      created: new Date(record.created_at).toLocaleDateString(),
+      adData: record.legacy_data,
+      savedAt: record.updated_at,
+      databaseId: record.id // Keep database UUID for reference
     }))
 
     console.log('✅ Loaded campaigns from Supabase:', campaigns.length)
@@ -242,10 +321,11 @@ async function getCampaignsFromSupabase(req, res) {
 
 async function deleteCampaignFromSupabase(id, req, res) {
   try {
+    // Delete by legacy_id (original campaign ID) since that's what the frontend uses
     const { error } = await supabase
       .from('campaigns')
       .delete()
-      .eq('id', id)
+      .eq('legacy_id', id)
 
     if (error) {
       console.error('❌ Supabase delete error:', error)

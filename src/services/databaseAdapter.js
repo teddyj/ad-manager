@@ -134,6 +134,22 @@ class DatabaseAdapter {
     }
   }
 
+  async updateCampaign(campaignId, updates) {
+    try {
+      console.log('📝 Attempting to update campaign via database API...', campaignId)
+      const result = await legacyCompatibility.updateCampaign(campaignId, updates)
+      // Update cache
+      this.campaignsCache = await legacyCompatibility.getCampaigns()
+      return result
+    } catch (error) {
+      console.error('❌ Failed to update campaign:', error)
+      return { 
+        success: false, 
+        error: error.message
+      }
+    }
+  }
+
   getCampaigns() {
     // Synchronous access for component initialization
     if (!this.cacheInitialized || !this.campaignsCache) {

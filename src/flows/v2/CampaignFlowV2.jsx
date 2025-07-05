@@ -77,21 +77,54 @@ const FLOW_STEPS = [
 const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }) => {
   // Flow state management
   const [currentStep, setCurrentStep] = useState(0);
+  
+  // Edit mode detection - check if we have an existing campaign ID
+  const isEditMode = initialData?.id && !initialData.id.startsWith(`campaign_${Date.now()}`);
+  
   const [campaignData, setCampaignData] = useState({
-    id: `campaign_${Date.now()}`,
-    name: '',
-    createdAt: new Date().toISOString(),
-    status: 'draft',
+    id: initialData?.id || `campaign_${Date.now()}`, // Preserve existing ID if available
+    name: initialData?.name || '',
+    createdAt: initialData?.createdAt || new Date().toISOString(),
+    status: initialData?.status || 'draft',
     version: 2,
+    isEditMode, // Add edit mode flag
     ...initialData
   });
   
-  const [stepData, setStepData] = useState({
-    product: null,
-    audience: null,
-    platforms: [],
-    creative: {},
-    publish: null
+  // Initialize step data - restore from initialData if in edit mode
+  const [stepData, setStepData] = useState(() => {
+    if (isEditMode && initialData) {
+      console.log('🔄 Restoring step data for edit mode:', {
+        campaignId: initialData.id,
+        campaignName: initialData.name,
+        hasProduct: !!initialData.product,
+        hasAudience: !!initialData.audience,
+        hasPlatforms: !!initialData.platforms,
+        hasCreative: !!initialData.creative,
+        hasPublish: !!initialData.publish
+      });
+      
+      const restoredData = {
+        product: initialData.product || null,
+        audience: initialData.audience || null,
+        platforms: initialData.platforms || [],
+        creative: initialData.creative || {},
+        publish: initialData.publish || null
+      };
+      
+      console.log('📋 Restored step data details:', restoredData);
+      return restoredData;
+    }
+    
+    // Default for new campaigns
+    console.log('🆕 Initializing new campaign step data');
+    return {
+      product: initialData?.product || null, // Support product selection from manager
+      audience: null,
+      platforms: [],
+      creative: {},
+      publish: null
+    };
   });
   
   const [stepValidation, setStepValidation] = useState({});
@@ -484,10 +517,20 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
   // Save campaign data using database adapter
   const saveCampaignData = async (data) => {
     console.log('Saving final campaign data:', data);
+    console.log('🔄 Edit mode:', data.isEditMode ? 'UPDATE existing campaign' : 'CREATE new campaign');
     
     try {
-      // Save the completed campaign using the database adapter
-      const result = await dbOperations.saveAd(data);
+      let result;
+      
+      if (data.isEditMode) {
+        // Update existing campaign
+        console.log('📝 Updating existing campaign:', data.id);
+        result = await dbOperations.updateCampaign(data.id, data);
+      } else {
+        // Create new campaign
+        console.log('🆕 Creating new campaign:', data.id);
+        result = await dbOperations.saveAd(data);
+      }
       
       if (result.success) {
         console.log('✅ Campaign saved successfully to database');
@@ -739,12 +782,22 @@ const CampaignFlowV2 = ({ onComplete, onCancel, initialData = {}, dbOperations }
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <h1 className="text-xl font-semibold text-gray-900">
-                Create Campaign
+                {isEditMode ? 'Edit Campaign' : 'Create Campaign'}
               </h1>
               {campaignData.name && (
                 <span className="text-sm text-gray-500">
                   - {campaignData.name}
                 </span>
+              )}
+              {isEditMode && (
+                <div className="flex items-center space-x-2">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    Edit Mode
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Created: {new Date(campaignData.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
               )}
             </div>
             

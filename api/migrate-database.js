@@ -79,40 +79,67 @@ export default async function handler(req, res) {
     console.log('🔗 Testing Supabase connection...');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if tables exist
+    // Check if tables exist by attempting to query them directly
     let tablesExist = false;
     let userCount = 0;
     let campaignCount = 0;
     let setupNeeded = true;
+    let errorDetails = [];
 
+    // Test campaigns table
     try {
-      // Try to count users and campaigns
-      const { count: users, error: userError } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
-      
-      const { count: campaigns, error: campaignError } = await supabase
+      console.log('Testing campaigns table...');
+      const { data: campaigns, error: campaignError } = await supabase
         .from('campaigns')
         .select('*', { count: 'exact', head: true });
 
-      if (!userError && !campaignError) {
-        tablesExist = true;
-        setupNeeded = false;
-        userCount = users || 0;
+      if (campaignError) {
+        console.log('❌ Campaigns table error:', campaignError.message);
+        errorDetails.push(`Campaigns table: ${campaignError.message}`);
+      } else {
+        console.log('✅ Campaigns table exists');
         campaignCount = campaigns || 0;
-        console.log('✅ Tables already exist');
       }
     } catch (error) {
-      console.log('ℹ️  Tables do not exist yet (this is expected for first setup)');
+      console.log('❌ Campaigns table error:', error.message);
+      errorDetails.push(`Campaigns table: ${error.message}`);
+    }
+
+    // Test users table
+    try {
+      console.log('Testing users table...');
+      const { data: users, error: userError } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true });
+
+      if (userError) {
+        console.log('❌ Users table error:', userError.message);
+        errorDetails.push(`Users table: ${userError.message}`);
+      } else {
+        console.log('✅ Users table exists');
+        userCount = users || 0;
+      }
+    } catch (error) {
+      console.log('❌ Users table error:', error.message);
+      errorDetails.push(`Users table: ${error.message}`);
+    }
+
+    // Only consider setup complete if both tables exist without errors
+    if (errorDetails.length === 0) {
+      tablesExist = true;
+      setupNeeded = false;
     }
 
     if (setupNeeded) {
       console.log('📋 Database setup is needed');
       
+      const projectId = supabaseUrl.replace('https://', '').replace('.supabase.co', '');
+      
       res.status(200).json({
         success: false,
         setupNeeded: true,
         message: 'Database tables need to be created',
+        errors: errorDetails,
         instructions: {
           step1: 'Go to your Supabase project dashboard',
           step2: 'Navigate to SQL Editor',
@@ -121,8 +148,9 @@ export default async function handler(req, res) {
           step5: 'Call this endpoint again to verify setup'
         },
         sql: SETUP_SQL,
-        supabaseUrl: supabaseUrl.replace('https://', '').replace('.supabase.co', ''),
-        dashboardUrl: `https://app.supabase.com/project/${supabaseUrl.replace('https://', '').replace('.supabase.co', '')}`
+        supabaseUrl: supabaseUrl,
+        dashboardUrl: `https://app.supabase.com/project/${projectId}`,
+        sqlEditorUrl: `https://app.supabase.com/project/${projectId}/sql`
       });
     } else {
       console.log('✅ Database is properly set up');

@@ -42,6 +42,7 @@ const ProductSelection = ({
   useEffect(() => {
     console.log('🔄 ProductSelection useEffect triggered');
     console.log('🔧 dbOperations available:', !!dbOperations);
+    console.log('📋 Initial data received:', data);
     
     if (dbOperations) {
       try {
@@ -51,13 +52,42 @@ const ProductSelection = ({
         
         setExistingProducts(loadedProducts);
         
-        // If we have existing products and no current data, default to existing mode
-        if (loadedProducts.length > 0 && !data?.name) {
+        // If we have existing product data (from campaign editing), set it up
+        if (data && data.name) {
+          console.log('🔄 Setting up existing product data for editing');
+          console.log('📋 Product data details:', {
+            name: data.name,
+            category: data.category,
+            url: data.url,
+            brand: data.brand,
+            price: data.price,
+            description: data.description,
+            hasImages: !!data.images && data.images.length > 0,
+            imageCount: data.images?.length || 0
+          });
+          
+          // Set to edit mode for existing product
+          setSelectionMode('existing');
+          setProductData(data);
+          
+          // Convert images if available
+          if (data.images && data.images.length > 0) {
+            convertImagesToProductAssets(data.images, data.name, data.id || 'existing').then(convertedAssets => {
+              setProducts(convertedAssets);
+            });
+          }
+          
+          // Try to find matching product ID if available
+          if (data.id) {
+            const matchingProduct = loadedProducts.find(p => p.id === data.id);
+            if (matchingProduct) {
+              setSelectedExistingProductId(data.id);
+              console.log('✅ Found matching product in library:', matchingProduct.name);
+            }
+          }
+        } else if (loadedProducts.length > 0 && !data?.name) {
           console.log('🎯 Setting mode to existing (products available, no current data)');
           setSelectionMode('existing');
-        } else if (data?.name) {
-          console.log('📝 Setting mode to new (current data exists)');
-          setSelectionMode('new');
         } else {
           console.log('🔄 No products available, staying in current mode:', selectionMode);
         }
@@ -194,34 +224,58 @@ const ProductSelection = ({
       console.log('🎯 Found selected product:', selectedProduct);
       
       if (selectedProduct) {
-        // Map existing product data to our format with better error handling
+        // Enhanced mapping with better field handling
         const mappedData = {
           id: selectedProduct.id,
           name: selectedProduct.name || '',
           description: selectedProduct.description || '',
           category: selectedProduct.category || '',
           images: Array.isArray(selectedProduct.images) ? selectedProduct.images : [],
-          url: selectedProduct.productUrl || selectedProduct.metadata?.url || selectedProduct.url || '',
-          price: selectedProduct.metadata?.price || selectedProduct.price || '',
+          // Enhanced URL mapping - try multiple possible field names
+          url: selectedProduct.url || 
+               selectedProduct.productUrl || 
+               selectedProduct.metadata?.url || 
+               selectedProduct.metadata?.productUrl || 
+               selectedProduct.settings?.url || '',
+          // Enhanced price mapping
+          price: selectedProduct.price || 
+                 selectedProduct.metadata?.price || 
+                 selectedProduct.settings?.price || '',
           brand: selectedProduct.brand || '',
-          tags: Array.isArray(selectedProduct.metadata?.tags) ? selectedProduct.metadata.tags : 
-                Array.isArray(selectedProduct.tags) ? selectedProduct.tags : [],
-          targetDemographic: selectedProduct.metadata?.targetDemographic || selectedProduct.targetDemographic || '',
-          seasonality: selectedProduct.metadata?.seasonality || selectedProduct.seasonality || '',
-          priceRange: selectedProduct.metadata?.priceRange || selectedProduct.priceRange || 'mid'
+          // Enhanced tags mapping
+          tags: Array.isArray(selectedProduct.tags) ? selectedProduct.tags : 
+                Array.isArray(selectedProduct.metadata?.tags) ? selectedProduct.metadata.tags : [],
+          // Enhanced demographic mapping
+          targetDemographic: selectedProduct.targetDemographic || 
+                            selectedProduct.metadata?.targetDemographic || 
+                            selectedProduct.settings?.targetDemographic || '',
+          seasonality: selectedProduct.seasonality || 
+                      selectedProduct.metadata?.seasonality || 
+                      selectedProduct.settings?.seasonality || '',
+          priceRange: selectedProduct.priceRange || 
+                     selectedProduct.metadata?.priceRange || 
+                     selectedProduct.settings?.priceRange || 'mid'
         };
         
-        console.log('✅ Mapped product data:', mappedData);
+        console.log('✅ Enhanced mapped product data:', mappedData);
         console.log('🏷️ Category mapping:', {
           originalCategory: selectedProduct.category,
           mappedCategory: mappedData.category,
           categoryExists: productCategories.some(c => c.value === mappedData.category)
         });
-        console.log('🔗 Product URL mapping:', {
+        console.log('🔗 Enhanced Product URL mapping:', {
+          url: selectedProduct.url,
           productUrl: selectedProduct.productUrl,
           metadataUrl: selectedProduct.metadata?.url,
-          url: selectedProduct.url,
+          metadataProductUrl: selectedProduct.metadata?.productUrl,
+          settingsUrl: selectedProduct.settings?.url,
           finalUrl: mappedData.url
+        });
+        console.log('💰 Enhanced Price mapping:', {
+          price: selectedProduct.price,
+          metadataPrice: selectedProduct.metadata?.price,
+          settingsPrice: selectedProduct.settings?.price,
+          finalPrice: mappedData.price
         });
         console.log('🖼️ Product Images mapping:', {
           originalImages: selectedProduct.images,
@@ -241,6 +295,7 @@ const ProductSelection = ({
         // Log final data for debugging
         console.log('📋 Final product data set in state:', mappedData);
         console.log('🏷️ Category value being passed to parent:', mappedData.category);
+        console.log('🔗 URL value being passed to parent:', mappedData.url);
         console.log('🎨 Product assets converted for ProductAssetManager:', convertedAssets);
         
         // Update campaign name
@@ -647,13 +702,21 @@ const ProductSelection = ({
       </div>
 
       {/* Product Information Form - Only show for new products or when existing product is selected */}
-      {(selectionMode === 'new' || (selectionMode === 'existing' && selectedExistingProductId)) && (
+      {(selectionMode === 'new' || (selectionMode === 'existing' && (selectedExistingProductId || productData.name))) && (
         <div className="bg-white rounded-lg border p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900">
-              {selectionMode === 'existing' ? 'Product Information (From Library)' : 'Product Information'}
+              {selectionMode === 'existing' ? 'Product Information' : 'Product Information'}
             </h3>
             <div className="flex items-center space-x-2 text-sm">
+              {/* Show data source indicator */}
+              {selectionMode === 'existing' && productData.name && (
+                <span className="inline-flex items-center px-2 py-1 bg-blue-100 rounded-full text-blue-600 text-xs">
+                  <span className="w-2 h-2 bg-blue-600 rounded-full mr-2"></span>
+                  {selectedExistingProductId ? 'From Product Library' : 'Campaign Data'}
+                </span>
+              )}
+              
               {/* Demo Data Button - Only show for new products */}
               {selectionMode === 'new' && (
                 <button
@@ -694,10 +757,7 @@ const ProductSelection = ({
                 id="product-name"
                 value={productData.name}
                 onChange={(e) => handleProductUpdate({ name: e.target.value })}
-                disabled={selectionMode === 'existing'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                }`}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="Enter product name"
               />
             </div>
@@ -711,10 +771,7 @@ const ProductSelection = ({
                 id="product-category"
                 value={productData.category}
                 onChange={(e) => handleProductUpdate({ category: e.target.value })}
-                disabled={selectionMode === 'existing'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                }`}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               >
                 <option value="">Select category</option>
                 {productCategories.map(category => (
@@ -740,10 +797,7 @@ const ProductSelection = ({
                 id="product-brand"
                 value={productData.brand}
                 onChange={(e) => handleProductUpdate({ brand: e.target.value })}
-                disabled={selectionMode === 'existing'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                }`}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="Brand name"
               />
             </div>
@@ -762,10 +816,7 @@ const ProductSelection = ({
                   id="product-price"
                   value={productData.price}
                   onChange={(e) => handleProductUpdate({ price: e.target.value })}
-                  disabled={selectionMode === 'existing'}
-                  className={`block w-full pl-7 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                    selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                  }`}
+                  className="block w-full pl-7 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="0.00"
                   step="0.01"
                 />
@@ -786,10 +837,7 @@ const ProductSelection = ({
                 id="target-demographic"
                 value={productData.targetDemographic}
                 onChange={(e) => handleProductUpdate({ targetDemographic: e.target.value })}
-                disabled={selectionMode === 'existing'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                }`}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               >
                 <option value="">Select demographic</option>
                 {targetDemographics.map(demo => (
@@ -809,10 +857,7 @@ const ProductSelection = ({
                 id="price-range"
                 value={productData.priceRange}
                 onChange={(e) => handleProductUpdate({ priceRange: e.target.value })}
-                disabled={selectionMode === 'existing'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-                }`}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               >
                 {priceRanges.map(range => (
                   <option key={range.value} value={range.value}>
@@ -833,10 +878,7 @@ const ProductSelection = ({
               rows={4}
               value={productData.description}
               onChange={(e) => handleProductUpdate({ description: e.target.value })}
-              disabled={selectionMode === 'existing'}
-              className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-              }`}
+              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="Describe your product's key features, benefits, and unique selling points..."
             />
             <p className="mt-1 text-xs text-gray-500">
@@ -854,10 +896,7 @@ const ProductSelection = ({
               id="product-url"
               value={productData.url}
               onChange={(e) => handleProductUpdate({ url: e.target.value })}
-              disabled={selectionMode === 'existing'}
-              className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                selectionMode === 'existing' ? 'bg-gray-100 text-gray-600' : ''
-              }`}
+              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="https://example.com/product"
             />
           </div>
